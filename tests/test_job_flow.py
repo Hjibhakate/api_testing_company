@@ -75,8 +75,9 @@ def test_full_job_flow():
     # STEP 5 - publish job
     publish_payload = {
         **created_job,
-        "job_status": "published",
+        "job_status": "active",
         "is_job_created": True,
+
     }
 
     publish_response = publish_job(job_prefix, publish_payload, token)
@@ -85,3 +86,29 @@ def test_full_job_flow():
     assert publish_response.status_code == 200
 
     print("Job Published")
+
+    # STEP 6 - verify aggregator GET response after publication
+    # frontend calls: GET /company/backend/aggregator/{job_prefix}
+    from config.config import BASE_URL
+    from utils.api_client import APIClient
+
+    api_client = APIClient()
+    aggregator_get_response = api_client.get(
+        f"{BASE_URL}/aggregator/{job_prefix}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    print("Aggregator GET Status:", aggregator_get_response.status_code)
+    assert aggregator_get_response.status_code in (200, 304)
+
+    if aggregator_get_response.status_code == 200:
+        body = aggregator_get_response.json()
+        assert body.get("status") == "success"
+        data = body.get("data")
+        assert data is not None
+        assert "companyData" in data
+        assert "job" in data
+        assert data["job"].get("job_prefix") == job_prefix
+        assert data["job"].get("job_status") == "published"
+
+
