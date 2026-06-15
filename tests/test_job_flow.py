@@ -1,5 +1,5 @@
 from services.job_service import generate_job_description
-from services.job_create import create_job
+from services.job_create import create_job, publish_job, run_job_aggregator
 from services.application_service import save_application
 from utils.auth_helper import get_token
 
@@ -63,3 +63,25 @@ def test_full_job_flow():
     assert app_response.status_code == 201
 
     print("Application Form Created")
+
+    # STEP 4 - run aggregator
+    aggregator_response = run_job_aggregator(job_prefix, token)
+    print("Aggregator Status:", aggregator_response.status_code)
+    print("Aggregator Response:", aggregator_response.text)
+    assert aggregator_response.status_code == 201
+
+    print("Aggregator Completed")
+
+    # STEP 5 - publish job
+    publish_payload = {
+        **created_job,
+        "job_status": "published",
+        "is_job_created": True,
+    }
+
+    publish_response = publish_job(job_prefix, publish_payload, token)
+    print("Publish Status:", publish_response.status_code)
+    print("Publish Response:", publish_response.text)
+    assert publish_response.status_code == 200
+
+    print("Job Published")

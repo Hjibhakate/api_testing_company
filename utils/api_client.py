@@ -18,3 +18,12 @@ class APIClient:
             timeout=60,
         )
         return response
+
+    def patch(self, endpoint, payload, headers=None):
+        response = requests.patch(
+            endpoint,
+            json=payload,
+            headers=headers,
+            timeout=60,
+        )
+        return response
