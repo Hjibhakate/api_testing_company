@@ -29,3 +29,14 @@ def login(otp):
 
 def get_token():
     return get_cached_token()
+
+
+def current_user(token):
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    return client.get(
+        f"{BASE_URL}/auth/current-user",
+        headers=headers
+    )
