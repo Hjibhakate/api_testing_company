@@ -96,3 +96,5 @@ def test_job_creation_flow():
     assert current_user_response.status_code in (200, 304)
 
     print("JOB PUBLISHED SUCCESSFULLY")
+
+# change 
