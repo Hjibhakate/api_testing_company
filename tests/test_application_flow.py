@@ -8,17 +8,39 @@ def test_job_creation_flow():
     token = get_token()
     assert token is not None
 
-    # STEP 2 - create job payload (static test data)
-    job_payload = {
+    # STEP 2 - generate job description (use AI JD, like job_flow)
+    from services.job_service import generate_job_description
+
+    gen_payload = {
+        "modelName": "AI",
         "jobRole": "QA Engineer",
-        "experience_level": "2",
+        "experience": "2",
         "locations": ["Nagpur, India"],
         "employment_type": ["Full-time"],
-        "work_mode": ["On-site"],
-        "companyId": "c2af53c8-073f-4d18-a0b2-ed5735abea45",
-        "job_status": "draft",
-        "is_job_created": False
+        "work_mode": ["On-site"]
     }
+
+    gen_response = generate_job_description(gen_payload)
+    assert gen_response.status_code == 201
+
+    print("Job Description Generated")
+
+    generated_output = gen_response.json()["data"]["data"]["output"]
+    employment_type = generated_output.get("employment_type", gen_payload["employment_type"])
+    if isinstance(employment_type, str):
+        employment_type = [employment_type]
+
+    job_payload = {
+        **generated_output,
+        "companyId": "c2af53c8-073f-4d18-a0b2-ed5735abea45",
+        "locations": gen_payload["locations"],
+        "employment_type": employment_type,
+        "work_mode": gen_payload["work_mode"],
+        "job_status": "draft",
+        "is_job_created": False,
+    }
+
+
 
     # STEP 3 - API call
     response = create_job(job_payload, token)

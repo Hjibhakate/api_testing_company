@@ -38,3 +38,4 @@ def publish_job(job_prefix, payload, token):
         payload,
         headers=headers
     )
+
