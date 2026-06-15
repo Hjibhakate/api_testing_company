@@ -109,6 +109,6 @@ def test_full_job_flow():
         assert "companyData" in data
         assert "job" in data
         assert data["job"].get("job_prefix") == job_prefix
-        assert data["job"].get("job_status") == "published"
+        assert data["job"].get("job_status") == "active"
 
 

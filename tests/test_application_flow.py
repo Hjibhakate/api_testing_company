@@ -36,9 +36,11 @@ def test_job_creation_flow():
         "locations": gen_payload["locations"],
         "employment_type": employment_type,
         "work_mode": gen_payload["work_mode"],
-        "job_status": "draft",
+        "job_status": "active",
         "is_job_created": False,
     }
+
+
 
 
 
@@ -78,16 +80,17 @@ def test_job_creation_flow():
     # STEP 7 - publish job
     publish_payload = {
         **created_job,
-        "job_status": "published",
+        "job_status": "active",
         "is_job_created": True,
     }
+
 
     publish_response = publish_job(job_prefix, publish_payload, token)
     print("Publish Response:", publish_response.text)
     assert publish_response.status_code == 200
 
     published_job = publish_response.json()["data"]["data"]
-    assert published_job["job_status"] == "published"
+    assert published_job["job_status"] == "active"
     assert published_job["is_job_created"] is True
 
     # STEP 8 - verify current user after publish redirect
