@@ -61,6 +61,8 @@ The script will ask for:
 - AI voice
 - AI avatar
 - Final confirmation before creating interview sets
+- Whether to invite a candidate after each interview set is created
+- Candidate email address when invite is selected
 
 ## Run Tests
 
@@ -147,6 +149,12 @@ utils/api_client.py
 
 Shared HTTP client with terminal logging.
 
+```text
+services/invite_service.py
+```
+
+Backend API calls for fetching candidates, inviting candidates, and sending Outlook invites.
+
 ## Flow
 
 1. User selects role generation settings.
@@ -156,6 +164,26 @@ Shared HTTP client with terminal logging.
 5. OpenRouter verifies whether the plan matches the role.
 6. The rating and reason are shown in the terminal and UI.
 7. The interview set is saved using the verified plan.
+8. In terminal mode, the script can ask whether to invite a candidate for that created set.
+9. If selected, it fetches candidates, sends the interview-set invite, and sends the Outlook invite.
+
+## Candidate Invite Flow
+
+After each interview set is created in terminal mode, the script asks:
+
+```text
+Do you want to invite a candidate for <role> (<set-code>)? YES or NO
+```
+
+If you enter `YES`, it asks for the candidate email and calls:
+
+```text
+GET /interview-sets/{companyId}/{interviewSetCode}/candidates
+POST /interview-sets/{companyId}/{interviewSetCode}/invite-candidates
+POST /integrations/outlook/invite
+```
+
+The invite payload may need adjustment if the backend expects a different request body.
 
 ## Cancel Behavior
 

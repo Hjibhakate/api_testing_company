@@ -1,6 +1,13 @@
 from copy import deepcopy
 
+from services.invite_service import (
+    find_invitation_link,
+    get_interview_set_candidates,
+    invite_candidates,
+    send_outlook_invite,
+)
 from services.interview_set_service import create_interview_plan, save_interview_set
+from services.interview_set_service import find_interview_set_code
 from test_data.test_data import (
     AI_AVATAR_FEMALE_URL,
     AI_AVATAR_MALE_URL,
@@ -158,6 +165,71 @@ def create_one_interview_set(
         return False
 
     print(f"[CREATE] Created interview set: {draft['title']}", flush=True)
+    return {
+        "title": draft["title"],
+        "code": find_interview_set_code(save_json),
+        "response": save_json,
+    }
+
+
+def invite_candidate_flow(token, interview_set):
+    code = interview_set.get("code")
+    title = interview_set.get("title", "Interview Set")
+    if not code:
+        print(f"[INVITE] Could not find interview set code for {title}. Invite skipped.", flush=True)
+        return False
+
+    should_invite = ask_choice(
+        f"Do you want to invite a candidate for {title} ({code})? YES or NO",
+        ("YES", "NO"),
+        "NO",
+    )
+    if should_invite != "YES":
+        print(f"[INVITE] Invite skipped for {title}.", flush=True)
+        return False
+
+    email = ask_text("Enter candidate email")
+    if not email:
+        print("[INVITE] No email entered. Invite skipped.", flush=True)
+        return False
+
+    first_name = ask_text("Enter candidate first name")
+    last_name = ask_text("Enter candidate last name")
+    if not first_name or not last_name:
+        print("[INVITE] First name and last name are required. Invite skipped.", flush=True)
+        return False
+
+    return send_candidate_invite(token, interview_set, email, first_name, last_name)
+
+
+def send_candidate_invite(token, interview_set, email, first_name, last_name):
+    code = interview_set.get("code")
+    title = interview_set.get("title", "Interview Set")
+    if not code:
+        print(f"[INVITE] Could not find interview set code for {title}. Invite skipped.", flush=True)
+        return False
+
+    candidates_response = get_interview_set_candidates(token, code)
+    if candidates_response.status_code != 200:
+        print("[INVITE] Candidate fetch failed:", candidates_response.text, flush=True)
+
+    invite_response = invite_candidates(token, code, email, first_name, last_name)
+    if invite_response.status_code not in (200, 201):
+        print("[INVITE] Invite candidates failed:", invite_response.text, flush=True)
+        return False
+
+    invite_json = invite_response.json()
+    meeting_link = find_invitation_link(invite_json)
+    if not meeting_link:
+        print("[INVITE] Invitation link not found. Outlook invite skipped.", flush=True)
+        return False
+
+    outlook_response = send_outlook_invite(token, code, email, title, meeting_link)
+    if outlook_response.status_code not in (200, 201):
+        print("[INVITE] Outlook invite failed:", outlook_response.text, flush=True)
+        return False
+
+    print(f"[INVITE] Invite sent to {email} for {title}.", flush=True)
     return True
 
 
@@ -197,6 +269,7 @@ def main():
 
     token = get_token()
     success_count = 0
+    invite_count = 0
 
     for role in roles:
         draft = build_draft(
@@ -208,10 +281,14 @@ def main():
             ai_avatar_gender,
         )
         print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
-        if create_one_interview_set(token, draft):
+        created_set = create_one_interview_set(token, draft)
+        if created_set:
             success_count += 1
+            if invite_candidate_flow(token, created_set):
+                invite_count += 1
 
     print(f"\nFinished. Created {success_count}/{len(roles)} interview sets.", flush=True)
+    print(f"Finished. Sent {invite_count} candidate invites.", flush=True)
 
 
 if __name__ == "__main__":

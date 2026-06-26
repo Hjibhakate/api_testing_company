@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from generate_interview_sets import build_draft, create_one_interview_set
+from generate_interview_sets import (
+    build_draft,
+    create_one_interview_set,
+    send_candidate_invite,
+)
 from utils.auth_helper import get_token
 from utils.openrouter_client import generate_job_roles
 
@@ -23,6 +27,8 @@ LOGS: list[dict[str, Any]] = []
 LOG_QUEUE: queue.Queue[dict[str, Any]] = queue.Queue()
 RATINGS: list[dict[str, Any]] = []
 RATINGS_LOCK = threading.Lock()
+CREATED_SETS: list[dict[str, Any]] = []
+CREATED_SETS_LOCK = threading.Lock()
 PROCESS: subprocess.Popen[str] | None = None
 PROCESS_LOCK = threading.Lock()
 CANCEL_EVENT = threading.Event()
@@ -343,6 +349,42 @@ HTML = r"""<!doctype html>
       margin-bottom: 18px;
     }
 
+    .created-panel {
+      margin-bottom: 18px;
+    }
+
+    .created-list {
+      display: grid;
+      gap: 10px;
+      padding: 14px 18px 18px;
+    }
+
+    .created-card {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) minmax(130px, 170px) minmax(130px, 170px) minmax(220px, 300px) auto;
+      gap: 12px;
+      align-items: end;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .created-title {
+      display: grid;
+      gap: 4px;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.25;
+    }
+
+    .created-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
     .ratings-list {
       display: grid;
       gap: 10px;
@@ -561,6 +603,7 @@ HTML = r"""<!doctype html>
       .options-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .criteria-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .factor-breakdown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .created-card { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 680px) {
@@ -666,6 +709,19 @@ HTML = r"""<!doctype html>
       </section>
     </div>
 
+    <section class="panel created-panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Invites</p>
+          <h2>Created Interview Sets</h2>
+          <p class="panel-copy">Invite candidates after each interview set is created.</p>
+        </div>
+      </div>
+      <div id="createdSetsList" class="created-list">
+        <div class="ratings-empty">Created interview sets will appear here.</div>
+      </div>
+    </section>
+
     <section class="panel ratings-panel">
       <div class="panel-head">
         <div>
@@ -724,6 +780,7 @@ HTML = r"""<!doctype html>
     const aiAvatarGender = document.getElementById("aiAvatarGender");
     const terminal = document.getElementById("terminal");
     const ratingsList = document.getElementById("ratingsList");
+    const createdSetsList = document.getElementById("createdSetsList");
     const statusText = document.getElementById("statusText");
     const dot = document.getElementById("dot");
     let nextIndex = 0;
@@ -769,6 +826,7 @@ HTML = r"""<!doctype html>
       nextIndex = data.next;
       setStatus(data);
       await pollRatings();
+      await pollCreatedSets();
       if (!data.running && pollTimer) {
         clearInterval(pollTimer);
         pollTimer = null;
@@ -833,6 +891,45 @@ HTML = r"""<!doctype html>
       renderRatings(data.ratings || []);
     }
 
+    function renderCreatedSets(sets) {
+      if (!sets.length) {
+        createdSetsList.innerHTML = '<div class="ratings-empty">Created interview sets will appear here.</div>';
+        return;
+      }
+
+      createdSetsList.innerHTML = sets.map((item, index) => `
+        <div class="created-card">
+          <div class="created-title">
+            ${item.title}
+            <span>${item.code || "Code not found"}</span>
+          </div>
+          <label>
+            First name
+            <input class="invite-first-name" data-index="${index}" type="text" placeholder="First name">
+          </label>
+          <label>
+            Last name
+            <input class="invite-last-name" data-index="${index}" type="text" placeholder="Last name">
+          </label>
+          <label>
+            Candidate email
+            <input class="invite-email" data-index="${index}" type="email" placeholder="candidate@example.com">
+          </label>
+          <button class="invite-btn" data-index="${index}" type="button" ${item.code ? "" : "disabled"}>Invite</button>
+        </div>
+      `).join("");
+
+      document.querySelectorAll(".invite-btn").forEach((button) => {
+        button.addEventListener("click", () => inviteForSet(Number(button.dataset.index)));
+      });
+    }
+
+    async function pollCreatedSets() {
+      const response = await fetch("/created-sets");
+      const data = await response.json();
+      renderCreatedSets(data.created_sets || []);
+    }
+
     async function startRun() {
       const response = await fetch("/run", { method: "POST" });
       const data = await response.json();
@@ -888,6 +985,42 @@ HTML = r"""<!doctype html>
       setStatus(data);
     }
 
+    async function inviteForSet(index) {
+      const firstNameInput = document.querySelector(`.invite-first-name[data-index="${index}"]`);
+      const lastNameInput = document.querySelector(`.invite-last-name[data-index="${index}"]`);
+      const input = document.querySelector(`.invite-email[data-index="${index}"]`);
+      const button = document.querySelector(`.invite-btn[data-index="${index}"]`);
+      const firstName = firstNameInput ? firstNameInput.value.trim() : "";
+      const lastName = lastNameInput ? lastNameInput.value.trim() : "";
+      const email = input ? input.value.trim() : "";
+      if (!firstName || !lastName) {
+        appendLine({ kind: "fail", text: "First name and last name are required for invite." });
+        return;
+      }
+      if (!email) {
+        appendLine({ kind: "fail", text: "Candidate email is required for invite." });
+        return;
+      }
+
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Inviting...";
+      }
+
+      const response = await fetch("/invite-created", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index, email, first_name: firstName, last_name: lastName })
+      });
+      const data = await response.json();
+      appendLine({ kind: data.ok ? "pass" : "fail", text: data.message });
+
+      if (button) {
+        button.disabled = false;
+        button.textContent = data.ok ? "Invite Sent" : "Invite";
+      }
+    }
+
     runBtn.addEventListener("click", startRun);
     generateBtn.addEventListener("click", startGenerate);
     cancelBtn.addEventListener("click", cancelRun);
@@ -895,10 +1028,12 @@ HTML = r"""<!doctype html>
       terminal.textContent = "";
       nextIndex = 0;
       renderRatings([]);
+      renderCreatedSets([]);
     });
 
     pollLogs();
     pollRatings();
+    pollCreatedSets();
   </script>
 </body>
 </html>
@@ -920,6 +1055,16 @@ def add_rating(draft: dict[str, Any], review: dict[str, Any]) -> None:
                 "reason": review.get("reason", ""),
                 "factor_scores": review.get("factor_scores") or {},
                 "weak_topics": review.get("missing_or_weak_topics") or [],
+            }
+        )
+
+
+def add_created_set(created_set: dict[str, Any]) -> None:
+    with CREATED_SETS_LOCK:
+        CREATED_SETS.append(
+            {
+                "title": created_set.get("title", "Interview Set"),
+                "code": created_set.get("code"),
             }
         )
 
@@ -1035,13 +1180,15 @@ def run_interview_set_generator(
                     ai_avatar_gender,
                 )
                 print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
-                if create_one_interview_set(
+                created_set = create_one_interview_set(
                     token,
                     draft,
                     should_cancel=CANCEL_EVENT.is_set,
                     review_callback=add_rating,
-                ):
+                )
+                if created_set:
                     success_count += 1
+                    add_created_set(created_set)
 
             print(
                 f"\nFinished. Created {success_count}/{len(roles)} interview sets.",
@@ -1062,6 +1209,8 @@ def clear_logs() -> None:
     LOGS.clear()
     with RATINGS_LOCK:
         RATINGS.clear()
+    with CREATED_SETS_LOCK:
+        CREATED_SETS.clear()
     while not LOG_QUEUE.empty():
         try:
             LOG_QUEUE.get_nowait()
@@ -1158,6 +1307,37 @@ def cancel_current_run() -> tuple[bool, str]:
     return True, "Cancel requested."
 
 
+def invite_created_set(payload: dict[str, Any]) -> tuple[bool, str]:
+    email = str(payload.get("email") or "").strip()
+    first_name = str(payload.get("first_name") or "").strip()
+    last_name = str(payload.get("last_name") or "").strip()
+    if not first_name or not last_name:
+        return False, "First name and last name are required for invite."
+    if not email:
+        return False, "Candidate email is required for invite."
+
+    try:
+        index = int(payload.get("index"))
+    except (TypeError, ValueError):
+        return False, "Invalid interview set selection."
+
+    with CREATED_SETS_LOCK:
+        if index < 0 or index >= len(CREATED_SETS):
+            return False, "Interview set selection was not found."
+        created_set = dict(CREATED_SETS[index])
+
+    if not created_set.get("code"):
+        return False, "Interview set code was not found."
+
+    try:
+        token = get_token()
+        if send_candidate_invite(token, created_set, email, first_name, last_name):
+            return True, f"Invite sent to {email} for {created_set['title']}."
+        return False, f"Invite failed for {created_set['title']}."
+    except Exception as exc:
+        return False, f"Invite failed: {exc}"
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -1182,6 +1362,12 @@ class Handler(BaseHTTPRequestHandler):
             with RATINGS_LOCK:
                 ratings = list(RATINGS)
             self.send_json({"ratings": ratings})
+            return
+
+        if parsed.path == "/created-sets":
+            with CREATED_SETS_LOCK:
+                created_sets = list(CREATED_SETS)
+            self.send_json({"created_sets": created_sets})
             return
 
         self.send_error(404)
@@ -1214,6 +1400,19 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == "/cancel":
             ok, message = cancel_current_run()
+            self.send_json(
+                {
+                    "ok": ok,
+                    "message": message,
+                    "running": RUNNING,
+                    "exit_code": EXIT_CODE,
+                }
+            )
+            return
+
+        if self.path == "/invite-created":
+            payload = self.read_json_body()
+            ok, message = invite_created_set(payload)
             self.send_json(
                 {
                     "ok": ok,

@@ -56,3 +56,40 @@ def save_interview_set(token, interview_plan, draft=None):
         headers=auth_headers(token),
         timeout=120,
     )
+
+
+def find_interview_set_code(response_json):
+    data = response_json.get("data", response_json)
+    keys = (
+        "setPrefix",
+        "interview_set_code",
+        "interviewSetCode",
+        "interviewSetPrefix",
+        "prefix",
+        "slug",
+        "code",
+    )
+
+    def walk(value):
+        if isinstance(value, dict):
+            for key in keys:
+                found = value.get(key)
+                if isinstance(found, str) and found:
+                    if found.lower() in {"technical", "behavioral", "bei"}:
+                        continue
+                    return found
+
+            for child in value.values():
+                found = walk(child)
+                if found:
+                    return found
+
+        if isinstance(value, list):
+            for child in value:
+                found = walk(child)
+                if found:
+                    return found
+
+        return None
+
+    return walk(data)
