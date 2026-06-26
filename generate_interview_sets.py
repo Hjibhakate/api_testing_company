@@ -83,7 +83,16 @@ def build_draft(
     return draft
 
 
-def create_one_interview_set(token, draft):
+def create_one_interview_set(
+    token,
+    draft,
+    should_cancel=None,
+    review_callback=None,
+):
+    if should_cancel is not None and should_cancel():
+        print("[CREATE] Cancel requested. Skipping next interview set.", flush=True)
+        return False
+
     plan_response = create_interview_plan(token, draft)
     if plan_response.status_code != 200:
         print("[CREATE] Interview plan failed:", plan_response.text, flush=True)
@@ -113,6 +122,13 @@ def create_one_interview_set(token, draft):
     weak_topics = review.get("missing_or_weak_topics") or []
     if weak_topics:
         print(f"[VERIFY] Missing/weak topics: {', '.join(weak_topics)}", flush=True)
+
+    if review_callback is not None:
+        review_callback(draft, review)
+
+    if should_cancel is not None and should_cancel():
+        print("[CREATE] Cancel requested after verification. Save skipped.", flush=True)
+        return False
 
     save_response = save_interview_set(token, interview_plan, draft)
     if save_response.status_code not in (200, 201):

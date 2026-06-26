@@ -21,8 +21,11 @@ from utils.openrouter_client import generate_job_roles
 ROOT = Path(__file__).resolve().parent
 LOGS: list[dict[str, Any]] = []
 LOG_QUEUE: queue.Queue[dict[str, Any]] = queue.Queue()
+RATINGS: list[dict[str, Any]] = []
+RATINGS_LOCK = threading.Lock()
 PROCESS: subprocess.Popen[str] | None = None
 PROCESS_LOCK = threading.Lock()
+CANCEL_EVENT = threading.Event()
 RUNNING = False
 EXIT_CODE: int | None = None
 
@@ -298,6 +301,15 @@ HTML = r"""<!doctype html>
 
     .ghost:hover { background: #dce4ef; }
 
+    .danger-button {
+      background: var(--danger);
+    }
+
+    .danger-button:hover {
+      background: #8f1d14;
+      box-shadow: 0 5px 14px rgba(180, 35, 24, 0.18);
+    }
+
     .wide-button {
       width: 100%;
     }
@@ -325,6 +337,87 @@ HTML = r"""<!doctype html>
       color: var(--ink);
       font-weight: 720;
       white-space: nowrap;
+    }
+
+    .ratings-panel {
+      margin-bottom: 18px;
+    }
+
+    .ratings-list {
+      display: grid;
+      gap: 10px;
+      padding: 14px 18px 18px;
+    }
+
+    .ratings-empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 4px 0;
+    }
+
+    .rating-card {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .score {
+      display: grid;
+      place-items: center;
+      min-height: 72px;
+      border-radius: 8px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+    }
+
+    .score strong {
+      color: var(--accent);
+      font-size: 25px;
+      line-height: 1;
+    }
+
+    .score span {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .rating-body h3 {
+      margin: 0 0 5px;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    .verdict {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: capitalize;
+    }
+
+    .rating-reason {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .weak-topics {
+      margin-top: 8px;
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.4;
     }
 
     .log-shell {
@@ -405,6 +498,7 @@ HTML = r"""<!doctype html>
       main { width: min(100vw - 20px, 1120px); padding-top: 14px; }
       .topbar, .panel-head, .form-actions { align-items: stretch; flex-direction: column; }
       .generator-form, .options-grid { grid-template-columns: 1fr; }
+      .rating-card { grid-template-columns: 1fr; }
       .generator-form label:nth-child(3) { grid-column: auto; }
       .status { width: 100%; }
       .terminal { min-height: 56vh; height: 62vh; }
@@ -490,6 +584,7 @@ HTML = r"""<!doctype html>
         </div>
         <div class="test-actions">
           <button id="runBtn" class="wide-button" type="button">Run Tests</button>
+          <button id="cancelBtn" class="danger-button wide-button" type="button" disabled>Cancel Run</button>
           <button id="clearBtn" class="ghost wide-button" type="button">Clear Log</button>
           <div class="summary-list">
             <div class="summary-row"><span>Execution</span><strong>Live</strong></div>
@@ -499,6 +594,19 @@ HTML = r"""<!doctype html>
         </div>
       </section>
     </div>
+
+    <section class="panel ratings-panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Quality</p>
+          <h2>Plan Ratings</h2>
+          <p class="panel-copy">OpenRouter review scores for each generated interview plan.</p>
+        </div>
+      </div>
+      <div id="ratingsList" class="ratings-list">
+        <div class="ratings-empty">Ratings will appear after each plan is reviewed.</div>
+      </div>
+    </section>
 
     <div class="log-shell">
       <div class="log-head">
@@ -512,6 +620,7 @@ HTML = r"""<!doctype html>
   <script>
     const runBtn = document.getElementById("runBtn");
     const generateBtn = document.getElementById("generateBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
     const clearBtn = document.getElementById("clearBtn");
     const jobFamily = document.getElementById("jobFamily");
     const roleCount = document.getElementById("roleCount");
@@ -521,6 +630,7 @@ HTML = r"""<!doctype html>
     const aiVoiceGender = document.getElementById("aiVoiceGender");
     const aiAvatarGender = document.getElementById("aiAvatarGender");
     const terminal = document.getElementById("terminal");
+    const ratingsList = document.getElementById("ratingsList");
     const statusText = document.getElementById("statusText");
     const dot = document.getElementById("dot");
     let nextIndex = 0;
@@ -541,11 +651,13 @@ HTML = r"""<!doctype html>
         statusText.textContent = "Running";
         runBtn.disabled = true;
         generateBtn.disabled = true;
+        cancelBtn.disabled = false;
         return;
       }
 
       runBtn.disabled = false;
       generateBtn.disabled = false;
+      cancelBtn.disabled = true;
       if (state.exit_code === 0) {
         dot.classList.add("pass");
         statusText.textContent = "Passed";
@@ -563,10 +675,41 @@ HTML = r"""<!doctype html>
       data.logs.forEach(appendLine);
       nextIndex = data.next;
       setStatus(data);
+      await pollRatings();
       if (!data.running && pollTimer) {
         clearInterval(pollTimer);
         pollTimer = null;
       }
+    }
+
+    function renderRatings(ratings) {
+      if (!ratings.length) {
+        ratingsList.innerHTML = '<div class="ratings-empty">Ratings will appear after each plan is reviewed.</div>';
+        return;
+      }
+
+      ratingsList.innerHTML = ratings.map((item) => {
+        const weakTopics = item.weak_topics && item.weak_topics.length
+          ? `<div class="weak-topics">Weak topics: ${item.weak_topics.join(", ")}</div>`
+          : "";
+        return `
+          <div class="rating-card">
+            <div class="score"><strong>${item.rating}</strong><span>/ 10</span></div>
+            <div class="rating-body">
+              <h3>${item.role}</h3>
+              <span class="verdict">${String(item.verdict || "needs_review").replace("_", " ")}</span>
+              <p class="rating-reason">${item.reason || "No reason returned."}</p>
+              ${weakTopics}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function pollRatings() {
+      const response = await fetch("/ratings");
+      const data = await response.json();
+      renderRatings(data.ratings || []);
     }
 
     async function startRun() {
@@ -617,14 +760,24 @@ HTML = r"""<!doctype html>
       pollLogs();
     }
 
+    async function cancelRun() {
+      const response = await fetch("/cancel", { method: "POST" });
+      const data = await response.json();
+      appendLine({ kind: data.ok ? "fail" : "meta", text: data.message });
+      setStatus(data);
+    }
+
     runBtn.addEventListener("click", startRun);
     generateBtn.addEventListener("click", startGenerate);
+    cancelBtn.addEventListener("click", cancelRun);
     clearBtn.addEventListener("click", () => {
       terminal.textContent = "";
       nextIndex = 0;
+      renderRatings([]);
     });
 
     pollLogs();
+    pollRatings();
   </script>
 </body>
 </html>
@@ -634,6 +787,19 @@ HTML = r"""<!doctype html>
 def add_log(text: str, kind: str = "") -> None:
     entry = {"text": text.rstrip("\n"), "kind": kind}
     LOG_QUEUE.put(entry)
+
+
+def add_rating(draft: dict[str, Any], review: dict[str, Any]) -> None:
+    with RATINGS_LOCK:
+        RATINGS.append(
+            {
+                "role": draft.get("title") or draft.get("role") or "Untitled role",
+                "rating": review.get("rating", 0),
+                "verdict": review.get("verdict", "needs_review"),
+                "reason": review.get("reason", ""),
+                "weak_topics": review.get("missing_or_weak_topics") or [],
+            }
+        )
 
 
 def drain_logs() -> None:
@@ -693,6 +859,7 @@ def run_pytest() -> None:
         with PROCESS_LOCK:
             PROCESS = None
             RUNNING = False
+            CANCEL_EVENT.clear()
 
 
 def run_interview_set_generator(
@@ -733,6 +900,10 @@ def run_interview_set_generator(
             success_count = 0
 
             for role in roles:
+                if CANCEL_EVENT.is_set():
+                    print("[UI] Cancel requested. Stopping before next role.", flush=True)
+                    break
+
                 draft = build_draft(
                     role,
                     experience_range,
@@ -742,7 +913,12 @@ def run_interview_set_generator(
                     ai_avatar_gender,
                 )
                 print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
-                if create_one_interview_set(token, draft):
+                if create_one_interview_set(
+                    token,
+                    draft,
+                    should_cancel=CANCEL_EVENT.is_set,
+                    review_callback=add_rating,
+                ):
                     success_count += 1
 
             print(
@@ -757,10 +933,13 @@ def run_interview_set_generator(
         add_log(f"[UI] Generator failed: {exc}", "fail")
     finally:
         RUNNING = False
+        CANCEL_EVENT.clear()
 
 
 def clear_logs() -> None:
     LOGS.clear()
+    with RATINGS_LOCK:
+        RATINGS.clear()
     while not LOG_QUEUE.empty():
         try:
             LOG_QUEUE.get_nowait()
@@ -775,6 +954,7 @@ def start_pytest() -> tuple[bool, str]:
         if RUNNING:
             return False, "Another process is already running."
 
+        CANCEL_EVENT.clear()
         RUNNING = True
         EXIT_CODE = None
         clear_logs()
@@ -816,6 +996,7 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
         if RUNNING:
             return False, "Another process is already running."
 
+        CANCEL_EVENT.clear()
         RUNNING = True
         EXIT_CODE = None
         clear_logs()
@@ -835,6 +1016,24 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
     )
     thread.start()
     return True, "Started."
+
+
+def cancel_current_run() -> tuple[bool, str]:
+    global EXIT_CODE, RUNNING
+
+    with PROCESS_LOCK:
+        if not RUNNING:
+            return False, "No process is running."
+
+        CANCEL_EVENT.set()
+        if PROCESS is not None and PROCESS.poll() is None:
+            PROCESS.terminate()
+            EXIT_CODE = 1
+            RUNNING = False
+            return True, "Test run cancelled."
+
+    add_log("[UI] Cancel requested. Waiting for current API request to finish.", "fail")
+    return True, "Cancel requested."
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -857,6 +1056,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(payload)
             return
 
+        if parsed.path == "/ratings":
+            with RATINGS_LOCK:
+                ratings = list(RATINGS)
+            self.send_json({"ratings": ratings})
+            return
+
         self.send_error(404)
 
     def do_POST(self) -> None:
@@ -875,6 +1080,18 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/generate":
             payload = self.read_json_body()
             ok, message = start_generator(payload)
+            self.send_json(
+                {
+                    "ok": ok,
+                    "message": message,
+                    "running": RUNNING,
+                    "exit_code": EXIT_CODE,
+                }
+            )
+            return
+
+        if self.path == "/cancel":
+            ok, message = cancel_current_run()
             self.send_json(
                 {
                     "ok": ok,
