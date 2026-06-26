@@ -203,34 +203,63 @@ def invite_candidate_flow(token, interview_set):
 
 
 def send_candidate_invite(token, interview_set, email, first_name, last_name):
+    return send_candidate_invites(
+        token,
+        interview_set,
+        [
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+            }
+        ],
+    )
+
+
+def send_candidate_invites(token, interview_set, candidates):
     code = interview_set.get("code")
     title = interview_set.get("title", "Interview Set")
     if not code:
         print(f"[INVITE] Could not find interview set code for {title}. Invite skipped.", flush=True)
+        return False
+    if not candidates:
+        print("[INVITE] No candidates provided. Invite skipped.", flush=True)
         return False
 
     candidates_response = get_interview_set_candidates(token, code)
     if candidates_response.status_code != 200:
         print("[INVITE] Candidate fetch failed:", candidates_response.text, flush=True)
 
-    invite_response = invite_candidates(token, code, email, first_name, last_name)
+    invite_response = invite_candidates(token, code, candidates)
     if invite_response.status_code not in (200, 201):
         print("[INVITE] Invite candidates failed:", invite_response.text, flush=True)
         return False
 
     invite_json = invite_response.json()
-    meeting_link = find_invitation_link(invite_json)
-    if not meeting_link:
-        print("[INVITE] Invitation link not found. Outlook invite skipped.", flush=True)
-        return False
+    results = (invite_json.get("data") or {}).get("results") or []
+    sent_count = 0
 
-    outlook_response = send_outlook_invite(token, code, email, title, meeting_link)
-    if outlook_response.status_code not in (200, 201):
-        print("[INVITE] Outlook invite failed:", outlook_response.text, flush=True)
-        return False
+    for result in results:
+        email = result.get("email")
+        meeting_link = result.get("invitation_link") or find_invitation_link(result)
+        if not email or not meeting_link:
+            print(
+                f"[INVITE] Outlook invite skipped for {email or 'unknown'}: "
+                f"{result.get('reason', 'invitation link not found')}",
+                flush=True,
+            )
+            continue
 
-    print(f"[INVITE] Invite sent to {email} for {title}.", flush=True)
-    return True
+        outlook_response = send_outlook_invite(token, code, email, title, meeting_link)
+        if outlook_response.status_code not in (200, 201):
+            print("[INVITE] Outlook invite failed:", outlook_response.text, flush=True)
+            continue
+
+        sent_count += 1
+        print(f"[INVITE] Invite sent to {email} for {title}.", flush=True)
+
+    print(f"[INVITE] Sent {sent_count}/{len(candidates)} Outlook invite(s) for {title}.", flush=True)
+    return sent_count > 0
 
 
 def main():

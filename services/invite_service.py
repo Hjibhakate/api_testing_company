@@ -24,15 +24,9 @@ def get_interview_set_candidates(token, interview_set_code):
     )
 
 
-def build_invite_candidates_payload(email, first_name, last_name):
+def build_invite_candidates_payload(candidates):
     return {
-        "candidates": [
-            {
-                "first_name": first_name,
-                "last_name": last_name,
-                "email": email,
-            }
-        ],
+        "candidates": candidates,
     }
 
 
@@ -89,11 +83,16 @@ def build_outlook_invite_payload(email, interview_set_code, title, meeting_link)
     }
 
 
-def invite_candidates(token, interview_set_code, email, first_name, last_name):
-    print(f"[INVITE] Inviting {email} for {interview_set_code}...", flush=True)
+def invite_candidates(token, interview_set_code, candidates):
+    emails = [candidate["email"] for candidate in candidates]
+    print(
+        f"[INVITE] Inviting {len(candidates)} candidate(s) for {interview_set_code}: "
+        f"{', '.join(emails)}",
+        flush=True,
+    )
     return client.post(
         f"{BASE_URL}/interview-sets/{COMPANY_ID}/{interview_set_code}/invite-candidates",
-        build_invite_candidates_payload(email, first_name, last_name),
+        build_invite_candidates_payload(candidates),
         headers=auth_headers(token),
         timeout=120,
     )

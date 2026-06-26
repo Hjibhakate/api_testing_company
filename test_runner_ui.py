@@ -5,6 +5,7 @@ import contextlib
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -17,6 +18,7 @@ from generate_interview_sets import (
     build_draft,
     create_one_interview_set,
     send_candidate_invite,
+    send_candidate_invites,
 )
 from utils.auth_helper import get_token
 from utils.openrouter_client import generate_job_roles
@@ -245,12 +247,10 @@ HTML = r"""<!doctype html>
       line-height: 1.25;
     }
 
-    input, select {
+    input, select, textarea {
       width: 100%;
-      min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 0 11px;
       color: var(--ink);
       background: #fff;
       font: inherit;
@@ -260,7 +260,19 @@ HTML = r"""<!doctype html>
       transition: border-color 120ms ease, box-shadow 120ms ease;
     }
 
-    input:focus, select:focus {
+    input, select {
+      min-height: 42px;
+      padding: 0 11px;
+    }
+
+    textarea {
+      min-height: 86px;
+      padding: 10px 11px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    input:focus, select:focus, textarea:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
@@ -361,7 +373,7 @@ HTML = r"""<!doctype html>
 
     .created-card {
       display: grid;
-      grid-template-columns: minmax(160px, 1fr) minmax(130px, 170px) minmax(130px, 170px) minmax(220px, 300px) auto;
+      grid-template-columns: minmax(180px, 240px) minmax(280px, 1fr) auto;
       gap: 12px;
       align-items: end;
       padding: 12px;
@@ -904,16 +916,8 @@ HTML = r"""<!doctype html>
             <span>${item.code || "Code not found"}</span>
           </div>
           <label>
-            First name
-            <input class="invite-first-name" data-index="${index}" type="text" placeholder="First name">
-          </label>
-          <label>
-            Last name
-            <input class="invite-last-name" data-index="${index}" type="text" placeholder="Last name">
-          </label>
-          <label>
-            Candidate email
-            <input class="invite-email" data-index="${index}" type="email" placeholder="candidate@example.com">
+            Candidates
+            <textarea class="invite-candidates" data-index="${index}" placeholder="One per line: First Last email@example.com"></textarea>
           </label>
           <button class="invite-btn" data-index="${index}" type="button" ${item.code ? "" : "disabled"}>Invite</button>
         </div>
@@ -986,19 +990,11 @@ HTML = r"""<!doctype html>
     }
 
     async function inviteForSet(index) {
-      const firstNameInput = document.querySelector(`.invite-first-name[data-index="${index}"]`);
-      const lastNameInput = document.querySelector(`.invite-last-name[data-index="${index}"]`);
-      const input = document.querySelector(`.invite-email[data-index="${index}"]`);
+      const input = document.querySelector(`.invite-candidates[data-index="${index}"]`);
       const button = document.querySelector(`.invite-btn[data-index="${index}"]`);
-      const firstName = firstNameInput ? firstNameInput.value.trim() : "";
-      const lastName = lastNameInput ? lastNameInput.value.trim() : "";
-      const email = input ? input.value.trim() : "";
-      if (!firstName || !lastName) {
-        appendLine({ kind: "fail", text: "First name and last name are required for invite." });
-        return;
-      }
-      if (!email) {
-        appendLine({ kind: "fail", text: "Candidate email is required for invite." });
+      const candidatesText = input ? input.value.trim() : "";
+      if (!candidatesText) {
+        appendLine({ kind: "fail", text: "Enter at least one candidate before inviting." });
         return;
       }
 
@@ -1010,7 +1006,7 @@ HTML = r"""<!doctype html>
       const response = await fetch("/invite-created", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ index, email, first_name: firstName, last_name: lastName })
+        body: JSON.stringify({ index, candidates_text: candidatesText })
       });
       const data = await response.json();
       appendLine({ kind: data.ok ? "pass" : "fail", text: data.message });
@@ -1308,13 +1304,10 @@ def cancel_current_run() -> tuple[bool, str]:
 
 
 def invite_created_set(payload: dict[str, Any]) -> tuple[bool, str]:
-    email = str(payload.get("email") or "").strip()
-    first_name = str(payload.get("first_name") or "").strip()
-    last_name = str(payload.get("last_name") or "").strip()
-    if not first_name or not last_name:
-        return False, "First name and last name are required for invite."
-    if not email:
-        return False, "Candidate email is required for invite."
+    candidates_text = str(payload.get("candidates_text") or "").strip()
+    candidates = parse_candidate_lines(candidates_text)
+    if not candidates:
+        return False, "Add at least one candidate. Use: First Last email@example.com"
 
     try:
         index = int(payload.get("index"))
@@ -1331,11 +1324,52 @@ def invite_created_set(payload: dict[str, Any]) -> tuple[bool, str]:
 
     try:
         token = get_token()
-        if send_candidate_invite(token, created_set, email, first_name, last_name):
-            return True, f"Invite sent to {email} for {created_set['title']}."
+        if send_candidate_invites(token, created_set, candidates):
+            return True, f"Invite sent for {len(candidates)} candidate(s) for {created_set['title']}."
         return False, f"Invite failed for {created_set['title']}."
     except Exception as exc:
         return False, f"Invite failed: {exc}"
+
+
+def parse_candidate_lines(candidates_text: str) -> list[dict[str, str]]:
+    candidates = []
+    email_pattern = re.compile(r"[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+")
+
+    for raw_line in candidates_text.replace(";", "\n").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        email_match = email_pattern.search(line)
+        if not email_match:
+            continue
+
+        email = email_match.group(0)
+        name_part = line.replace(email, "").strip(" ,")
+        if "," in name_part:
+            parts = [part.strip() for part in name_part.split(",") if part.strip()]
+        else:
+            parts = [part.strip() for part in name_part.split() if part.strip()]
+
+        if len(parts) >= 2:
+            first_name = parts[0]
+            last_name = " ".join(parts[1:])
+        elif len(parts) == 1:
+            first_name = parts[0]
+            last_name = "Candidate"
+        else:
+            first_name = email.split("@", 1)[0]
+            last_name = "Candidate"
+
+        candidates.append(
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+            }
+        )
+
+    return candidates
 
 
 class Handler(BaseHTTPRequestHandler):
