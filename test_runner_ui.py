@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import queue
@@ -12,6 +13,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from generate_interview_sets import build_draft, create_one_interview_set
+from utils.auth_helper import get_token
+from utils.openrouter_client import generate_job_roles
+
 
 ROOT = Path(__file__).resolve().parent
 LOGS: list[dict[str, Any]] = []
@@ -20,6 +25,25 @@ PROCESS: subprocess.Popen[str] | None = None
 PROCESS_LOCK = threading.Lock()
 RUNNING = False
 EXIT_CODE: int | None = None
+
+
+class LogWriter:
+    def __init__(self, kind: str = "") -> None:
+        self.kind = kind
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if line:
+                add_log(line, classify_line(line))
+        return len(text)
+
+    def flush(self) -> None:
+        if self._buffer:
+            add_log(self._buffer, self.kind)
+            self._buffer = ""
 
 
 HTML = r"""<!doctype html>
@@ -112,6 +136,37 @@ HTML = r"""<!doctype html>
       margin-bottom: 16px;
     }
 
+    .generator {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 120px minmax(160px, 220px) auto;
+      align-items: end;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 10px;
+      color: var(--ink);
+      background: #fff;
+      font: inherit;
+    }
+
     .controls {
       display: flex;
       align-items: center;
@@ -173,6 +228,7 @@ HTML = r"""<!doctype html>
     @media (max-width: 680px) {
       main { width: min(100vw - 20px, 1120px); padding-top: 14px; }
       .topbar, .toolbar { align-items: stretch; flex-direction: column; }
+      .generator { grid-template-columns: 1fr; }
       .status { width: 100%; }
       .terminal { min-height: 56vh; height: 62vh; }
     }
@@ -193,12 +249,32 @@ HTML = r"""<!doctype html>
       <div class="hint">Runs <strong>python -m pytest</strong> and shows live output here.</div>
     </div>
 
+    <div class="generator">
+      <label>
+        Job type
+        <input id="jobFamily" type="text" value="Engineering">
+      </label>
+      <label>
+        Roles
+        <input id="roleCount" type="number" min="1" max="50" value="5">
+      </label>
+      <label>
+        Experience
+        <input id="experienceRange" type="text" value="1-2 years">
+      </label>
+      <button id="generateBtn" type="button">Generate Interview Sets</button>
+    </div>
+
     <div id="terminal" class="terminal" aria-live="polite"></div>
   </main>
 
   <script>
     const runBtn = document.getElementById("runBtn");
+    const generateBtn = document.getElementById("generateBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const jobFamily = document.getElementById("jobFamily");
+    const roleCount = document.getElementById("roleCount");
+    const experienceRange = document.getElementById("experienceRange");
     const terminal = document.getElementById("terminal");
     const statusText = document.getElementById("statusText");
     const dot = document.getElementById("dot");
@@ -219,10 +295,12 @@ HTML = r"""<!doctype html>
         dot.classList.add("running");
         statusText.textContent = "Running";
         runBtn.disabled = true;
+        generateBtn.disabled = true;
         return;
       }
 
       runBtn.disabled = false;
+      generateBtn.disabled = false;
       if (state.exit_code === 0) {
         dot.classList.add("pass");
         statusText.textContent = "Passed";
@@ -263,7 +341,35 @@ HTML = r"""<!doctype html>
       pollLogs();
     }
 
+    async function startGenerate() {
+      const payload = {
+        job_family: jobFamily.value.trim() || "Engineering",
+        count: Number(roleCount.value || 1),
+        experience_range: experienceRange.value.trim() || "1-2 years"
+      };
+
+      const response = await fetch("/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!data.ok) {
+        appendLine({ kind: "fail", text: data.message });
+        setStatus(data);
+        return;
+      }
+      nextIndex = 0;
+      terminal.textContent = "";
+      setStatus(data);
+      if (!pollTimer) {
+        pollTimer = setInterval(pollLogs, 700);
+      }
+      pollLogs();
+    }
+
     runBtn.addEventListener("click", startRun);
+    generateBtn.addEventListener("click", startGenerate);
     clearBtn.addEventListener("click", () => {
       terminal.textContent = "";
       nextIndex = 0;
@@ -340,23 +446,96 @@ def run_pytest() -> None:
             RUNNING = False
 
 
+def run_interview_set_generator(job_family: str, count: int, experience_range: str) -> None:
+    global EXIT_CODE, RUNNING
+
+    try:
+        add_log("[UI] Starting AI interview set generator.", "meta")
+        add_log(f"[UI] Job type: {job_family}", "meta")
+        add_log(f"[UI] Role count: {count}", "meta")
+        add_log(f"[UI] Experience range: {experience_range}", "meta")
+
+        writer = LogWriter()
+        with contextlib.redirect_stdout(writer):
+            roles = generate_job_roles(job_family, count, experience_range)
+            print("[UI] Generated roles:", flush=True)
+            for index, role in enumerate(roles, start=1):
+                print(f"{index}. {role['title']} ({role.get('seniority', 'Senior')})", flush=True)
+
+            token = get_token()
+            success_count = 0
+
+            for role in roles:
+                draft = build_draft(role, experience_range)
+                print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
+                if create_one_interview_set(token, draft):
+                    success_count += 1
+
+            print(
+                f"\nFinished. Created {success_count}/{len(roles)} interview sets.",
+                flush=True,
+            )
+        writer.flush()
+        EXIT_CODE = 0
+        add_log("[UI] Generator finished.", "pass")
+    except Exception as exc:
+        EXIT_CODE = 1
+        add_log(f"[UI] Generator failed: {exc}", "fail")
+    finally:
+        RUNNING = False
+
+
+def clear_logs() -> None:
+    LOGS.clear()
+    while not LOG_QUEUE.empty():
+        try:
+            LOG_QUEUE.get_nowait()
+        except queue.Empty:
+            break
+
+
 def start_pytest() -> tuple[bool, str]:
     global EXIT_CODE, RUNNING
 
     with PROCESS_LOCK:
         if RUNNING:
-            return False, "A test run is already running."
+            return False, "Another process is already running."
 
         RUNNING = True
         EXIT_CODE = None
-        LOGS.clear()
-        while not LOG_QUEUE.empty():
-            try:
-                LOG_QUEUE.get_nowait()
-            except queue.Empty:
-                break
+        clear_logs()
 
     thread = threading.Thread(target=run_pytest, daemon=True)
+    thread.start()
+    return True, "Started."
+
+
+def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
+    global EXIT_CODE, RUNNING
+
+    job_family = str(payload.get("job_family") or "Engineering").strip()
+    experience_range = str(payload.get("experience_range") or "1-2 years").strip()
+    try:
+        count = int(payload.get("count") or 1)
+    except (TypeError, ValueError):
+        return False, "Role count must be a number."
+
+    if count < 1:
+        return False, "Role count must be at least 1."
+
+    with PROCESS_LOCK:
+        if RUNNING:
+            return False, "Another process is already running."
+
+        RUNNING = True
+        EXIT_CODE = None
+        clear_logs()
+
+    thread = threading.Thread(
+        target=run_interview_set_generator,
+        args=(job_family, count, experience_range),
+        daemon=True,
+    )
     thread.start()
     return True, "Started."
 
@@ -384,19 +563,34 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        if self.path != "/run":
-            self.send_error(404)
+        if self.path == "/run":
+            ok, message = start_pytest()
+            self.send_json(
+                {
+                    "ok": ok,
+                    "message": message,
+                    "running": RUNNING,
+                    "exit_code": EXIT_CODE,
+                }
+            )
             return
 
-        ok, message = start_pytest()
-        self.send_json(
-            {
-                "ok": ok,
-                "message": message,
-                "running": RUNNING,
-                "exit_code": EXIT_CODE,
-            }
-        )
+        if self.path == "/generate":
+            payload = self.read_json_body()
+            ok, message = start_generator(payload)
+            self.send_json(
+                {
+                    "ok": ok,
+                    "message": message,
+                    "running": RUNNING,
+                    "exit_code": EXIT_CODE,
+                }
+            )
+            return
+
+        else:
+            self.send_error(404)
+            return
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -408,6 +602,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
+
+    def read_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0:
+            return {}
+
+        raw_body = self.rfile.read(length)
+        try:
+            return json.loads(raw_body.decode("utf-8"))
+        except json.JSONDecodeError:
+            return {}
 
     def send_json(self, payload: dict[str, Any]) -> None:
         encoded = json.dumps(payload).encode("utf-8")
