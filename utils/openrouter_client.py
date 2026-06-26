@@ -135,11 +135,19 @@ Return only a JSON object with this exact schema:
   "rating": 0,
   "verdict": "pass|needs_review|fail",
   "reason": "one concise sentence",
+  "factor_scores": {{
+    "role_relevance": {{"score": 0, "reason": "short reason"}},
+    "experience_fit": {{"score": 0, "reason": "short reason"}},
+    "skill_coverage": {{"score": 0, "reason": "short reason"}},
+    "time_allocation": {{"score": 0, "reason": "short reason"}},
+    "specificity": {{"score": 0, "reason": "short reason"}}
+  }},
   "role_alignment_notes": ["short note 1", "short note 2"],
   "missing_or_weak_topics": ["topic if any"]
 }}
 
-Rate out of 10 based on role relevance, seniority/experience fit, coverage of role-specific skills,
+Rate the final rating out of 10. Also rate each factor out of 10:
+role relevance, seniority/experience fit, coverage of role-specific skills,
 time allocation, and whether the plan avoids generic or unrelated topics.
 """
 
@@ -161,6 +169,7 @@ time allocation, and whether the plan avoids generic or unrelated topics.
     result["rating"] = max(0, min(10, float(result.get("rating", 0))))
     result["verdict"] = str(result.get("verdict", "needs_review"))
     result["reason"] = str(result.get("reason", "")).strip()
+    result["factor_scores"] = result.get("factor_scores") or {}
     result["role_alignment_notes"] = result.get("role_alignment_notes") or []
     result["missing_or_weak_topics"] = result.get("missing_or_weak_topics") or []
     return result

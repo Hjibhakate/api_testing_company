@@ -349,6 +349,36 @@ HTML = r"""<!doctype html>
       padding: 14px 18px 18px;
     }
 
+    .criteria-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 10px;
+      padding: 14px 18px 0;
+    }
+
+    .criteria-item {
+      min-height: 70px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .criteria-item strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .criteria-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
     .ratings-empty {
       color: var(--muted);
       font-size: 13px;
@@ -418,6 +448,43 @@ HTML = r"""<!doctype html>
       color: var(--danger);
       font-size: 12px;
       line-height: 1.4;
+    }
+
+    .factor-breakdown {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .factor-score {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .factor-score strong {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .factor-score b {
+      color: var(--accent);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .factor-score span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
     }
 
     .log-shell {
@@ -492,12 +559,16 @@ HTML = r"""<!doctype html>
       .generator-form { grid-template-columns: minmax(0, 1fr) 110px; }
       .generator-form label:nth-child(3) { grid-column: 1 / -1; }
       .options-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .criteria-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .factor-breakdown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 680px) {
       main { width: min(100vw - 20px, 1120px); padding-top: 14px; }
       .topbar, .panel-head, .form-actions { align-items: stretch; flex-direction: column; }
       .generator-form, .options-grid { grid-template-columns: 1fr; }
+      .criteria-grid { grid-template-columns: 1fr; }
+      .factor-breakdown { grid-template-columns: 1fr; }
       .rating-card { grid-template-columns: 1fr; }
       .generator-form label:nth-child(3) { grid-column: auto; }
       .status { width: 100%; }
@@ -603,6 +674,28 @@ HTML = r"""<!doctype html>
           <p class="panel-copy">OpenRouter review scores for each generated interview plan.</p>
         </div>
       </div>
+      <div class="criteria-grid">
+        <div class="criteria-item">
+          <strong>Role Relevance</strong>
+          <span>How closely topics match the selected job role.</span>
+        </div>
+        <div class="criteria-item">
+          <strong>Experience Fit</strong>
+          <span>Whether depth matches the selected experience range.</span>
+        </div>
+        <div class="criteria-item">
+          <strong>Skill Coverage</strong>
+          <span>Coverage of core skills expected for the role.</span>
+        </div>
+        <div class="criteria-item">
+          <strong>Time Allocation</strong>
+          <span>Whether phases fit the interview duration.</span>
+        </div>
+        <div class="criteria-item">
+          <strong>Specificity</strong>
+          <span>Checks that topics are not generic or unrelated.</span>
+        </div>
+      </div>
       <div id="ratingsList" class="ratings-list">
         <div class="ratings-empty">Ratings will appear after each plan is reviewed.</div>
       </div>
@@ -688,10 +781,37 @@ HTML = r"""<!doctype html>
         return;
       }
 
+      const factorLabels = {
+        role_relevance: "Role Relevance",
+        experience_fit: "Experience Fit",
+        skill_coverage: "Skill Coverage",
+        time_allocation: "Time Allocation",
+        specificity: "Specificity"
+      };
+
       ratingsList.innerHTML = ratings.map((item) => {
         const weakTopics = item.weak_topics && item.weak_topics.length
           ? `<div class="weak-topics">Weak topics: ${item.weak_topics.join(", ")}</div>`
           : "";
+        const factorScores = item.factor_scores || {};
+        const factorKeys = Object.keys(factorLabels);
+        const factorBreakdown = factorKeys.some((key) => factorScores[key])
+          ? `
+            <div class="factor-breakdown">
+              ${factorKeys.map((key) => {
+                const factor = factorScores[key] || {};
+                const score = factor.score ?? "-";
+                const reason = factor.reason || "No detail returned.";
+                return `
+                  <div class="factor-score">
+                    <strong>${factorLabels[key]} <b>${score}/10</b></strong>
+                    <span>${reason}</span>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `
+          : '<p class="rating-reason">Detailed factor breakdown will appear for new ratings.</p>';
         return `
           <div class="rating-card">
             <div class="score"><strong>${item.rating}</strong><span>/ 10</span></div>
@@ -699,6 +819,7 @@ HTML = r"""<!doctype html>
               <h3>${item.role}</h3>
               <span class="verdict">${String(item.verdict || "needs_review").replace("_", " ")}</span>
               <p class="rating-reason">${item.reason || "No reason returned."}</p>
+              ${factorBreakdown}
               ${weakTopics}
             </div>
           </div>
@@ -797,6 +918,7 @@ def add_rating(draft: dict[str, Any], review: dict[str, Any]) -> None:
                 "rating": review.get("rating", 0),
                 "verdict": review.get("verdict", "needs_review"),
                 "reason": review.get("reason", ""),
+                "factor_scores": review.get("factor_scores") or {},
                 "weak_topics": review.get("missing_or_weak_topics") or [],
             }
         )

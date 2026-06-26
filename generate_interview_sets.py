@@ -119,6 +119,23 @@ def create_one_interview_set(
     if review["reason"]:
         print(f"[VERIFY] Reason: {review['reason']}", flush=True)
 
+    factor_scores = review.get("factor_scores") or {}
+    factor_labels = {
+        "role_relevance": "Role relevance",
+        "experience_fit": "Experience fit",
+        "skill_coverage": "Skill coverage",
+        "time_allocation": "Time allocation",
+        "specificity": "Specificity",
+    }
+    for factor_key, factor_label in factor_labels.items():
+        factor = factor_scores.get(factor_key) or {}
+        if factor:
+            print(
+                f"[VERIFY] {factor_label}: {factor.get('score', '-')}/10 - "
+                f"{factor.get('reason', 'No detail returned.')}",
+                flush=True,
+            )
+
     weak_topics = review.get("missing_or_weak_topics") or []
     if weak_topics:
         print(f"[VERIFY] Missing/weak topics: {', '.join(weak_topics)}", flush=True)
