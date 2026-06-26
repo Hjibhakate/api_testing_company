@@ -138,7 +138,7 @@ HTML = r"""<!doctype html>
 
     .generator {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) 120px minmax(160px, 220px) auto;
+      grid-template-columns: minmax(180px, 1fr) 100px minmax(150px, 1fr) 140px 120px auto;
       align-items: end;
       gap: 12px;
       padding: 12px;
@@ -156,7 +156,7 @@ HTML = r"""<!doctype html>
       line-height: 1.25;
     }
 
-    input {
+    input, select {
       width: 100%;
       min-height: 38px;
       border: 1px solid var(--line);
@@ -262,6 +262,18 @@ HTML = r"""<!doctype html>
         Experience
         <input id="experienceRange" type="text" value="1-2 years">
       </label>
+      <label>
+        Mode
+        <select id="questionMode">
+          <option value="DIRECT">Direct</option>
+          <option value="SCENARIO">Scenario</option>
+          <option value="BEI">BEI</option>
+        </select>
+      </label>
+      <label>
+        Minutes
+        <input id="duration" type="number" min="1" value="30">
+      </label>
       <button id="generateBtn" type="button">Generate Interview Sets</button>
     </div>
 
@@ -275,6 +287,8 @@ HTML = r"""<!doctype html>
     const jobFamily = document.getElementById("jobFamily");
     const roleCount = document.getElementById("roleCount");
     const experienceRange = document.getElementById("experienceRange");
+    const questionMode = document.getElementById("questionMode");
+    const duration = document.getElementById("duration");
     const terminal = document.getElementById("terminal");
     const statusText = document.getElementById("statusText");
     const dot = document.getElementById("dot");
@@ -345,7 +359,9 @@ HTML = r"""<!doctype html>
       const payload = {
         job_family: jobFamily.value.trim() || "Engineering",
         count: Number(roleCount.value || 1),
-        experience_range: experienceRange.value.trim() || "1-2 years"
+        experience_range: experienceRange.value.trim() || "1-2 years",
+        question_mode: questionMode.value || "DIRECT",
+        duration: Number(duration.value || 30)
       };
 
       const response = await fetch("/generate", {
@@ -446,7 +462,13 @@ def run_pytest() -> None:
             RUNNING = False
 
 
-def run_interview_set_generator(job_family: str, count: int, experience_range: str) -> None:
+def run_interview_set_generator(
+    job_family: str,
+    count: int,
+    experience_range: str,
+    question_mode: str,
+    duration: int,
+) -> None:
     global EXIT_CODE, RUNNING
 
     try:
@@ -454,10 +476,18 @@ def run_interview_set_generator(job_family: str, count: int, experience_range: s
         add_log(f"[UI] Job type: {job_family}", "meta")
         add_log(f"[UI] Role count: {count}", "meta")
         add_log(f"[UI] Experience range: {experience_range}", "meta")
+        add_log(f"[UI] Question mode: {question_mode}", "meta")
+        add_log(f"[UI] Duration: {duration} minutes", "meta")
 
         writer = LogWriter()
         with contextlib.redirect_stdout(writer):
-            roles = generate_job_roles(job_family, count, experience_range)
+            roles = generate_job_roles(
+                job_family,
+                count,
+                experience_range,
+                question_mode,
+                duration,
+            )
             print("[UI] Generated roles:", flush=True)
             for index, role in enumerate(roles, start=1):
                 print(f"{index}. {role['title']} ({role.get('seniority', 'Senior')})", flush=True)
@@ -466,7 +496,7 @@ def run_interview_set_generator(job_family: str, count: int, experience_range: s
             success_count = 0
 
             for role in roles:
-                draft = build_draft(role, experience_range)
+                draft = build_draft(role, experience_range, question_mode, duration)
                 print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
                 if create_one_interview_set(token, draft):
                     success_count += 1
@@ -515,13 +545,22 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
 
     job_family = str(payload.get("job_family") or "Engineering").strip()
     experience_range = str(payload.get("experience_range") or "1-2 years").strip()
+    question_mode = str(payload.get("question_mode") or "DIRECT").strip().upper()
     try:
         count = int(payload.get("count") or 1)
     except (TypeError, ValueError):
         return False, "Role count must be a number."
+    try:
+        duration = int(payload.get("duration") or 30)
+    except (TypeError, ValueError):
+        return False, "Duration must be a number."
 
     if count < 1:
         return False, "Role count must be at least 1."
+    if duration < 1:
+        return False, "Duration must be at least 1 minute."
+    if question_mode not in ("DIRECT", "SCENARIO", "BEI"):
+        return False, "Question mode must be DIRECT, SCENARIO, or BEI."
 
     with PROCESS_LOCK:
         if RUNNING:
@@ -533,7 +572,7 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
 
     thread = threading.Thread(
         target=run_interview_set_generator,
-        args=(job_family, count, experience_range),
+        args=(job_family, count, experience_range, question_mode, duration),
         daemon=True,
     )
     thread.start()

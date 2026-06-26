@@ -27,7 +27,7 @@ def _extract_json_array(text):
     return parsed
 
 
-def generate_job_roles(job_family, count, experience_range):
+def generate_job_roles(job_family, count, experience_range, question_mode, duration):
     load_dotenv()
     api_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
     if not api_key or api_key == "paste_your_openrouter_api_key_here":
@@ -39,16 +39,18 @@ def generate_job_roles(job_family, count, experience_range):
     prompt = f"""
 Generate {count} interview job role drafts for the job family: {job_family}.
 Experience range must be exactly: {experience_range}.
+Question mode must be exactly: {question_mode}.
+Interview duration must be exactly: {duration}.
 
 Return only a JSON array. Each item must use this exact schema:
 {{
   "title": "Role Name",
   "role": "Role Name",
-  "duration": 10,
+  "duration": {duration},
   "experience_level": "{experience_range}",
   "seniority": "Junior|Mid|Senior",
   "interviewCategory": "technical",
-  "question_mode": "DIRECT",
+  "question_mode": "{question_mode}",
   "feedbackType": "ASK",
   "visibility": "PUBLIC",
   "org_type": "company"

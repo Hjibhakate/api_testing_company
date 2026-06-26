@@ -28,13 +28,25 @@ def ask_int(question, default=5):
         return value
 
 
-def build_draft(role_data, experience_range):
+def ask_choice(question, choices, default):
+    normalized_choices = {choice.upper(): choice.upper() for choice in choices}
+
+    while True:
+        answer = ask_text(question, default).upper()
+        if answer in normalized_choices:
+            return normalized_choices[answer]
+
+        print(f"Please choose one of: {', '.join(choices)}", flush=True)
+
+
+def build_draft(role_data, experience_range, question_mode=None, duration=None):
     draft = deepcopy(INTERVIEW_SET_DRAFT)
     draft.update(role_data)
     draft["title"] = role_data["title"]
     draft["role"] = role_data.get("role", role_data["title"])
     draft["experience_level"] = experience_range
-    draft["duration"] = int(role_data.get("duration", draft["duration"]))
+    draft["question_mode"] = question_mode or role_data.get("question_mode", draft["question_mode"])
+    draft["duration"] = int(duration or role_data.get("duration", draft["duration"]))
     return draft
 
 
@@ -70,8 +82,14 @@ def main():
     job_family = ask_text("Which type of job roles do you want to generate?", "Engineering")
     count = ask_int("How many job roles do you want to generate?", 5)
     experience_range = ask_text("What experience range do you want?", "1-2 years")
+    question_mode = ask_choice(
+        "Which question mode do you want? DIRECT, SCENARIO, or BEI",
+        ("DIRECT", "SCENARIO", "BEI"),
+        "DIRECT",
+    )
+    duration = ask_int("How many minutes for interview? 10, 20, 30, 45, or 60", 30)
 
-    roles = generate_job_roles(job_family, count, experience_range)
+    roles = generate_job_roles(job_family, count, experience_range, question_mode, duration)
     print("\nGenerated roles:", flush=True)
     for index, role in enumerate(roles, start=1):
         print(f"{index}. {role['title']} ({role.get('seniority', 'Senior')})", flush=True)
@@ -85,7 +103,7 @@ def main():
     success_count = 0
 
     for role in roles:
-        draft = build_draft(role, experience_range)
+        draft = build_draft(role, experience_range, question_mode, duration)
         print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
         if create_one_interview_set(token, draft):
             success_count += 1
