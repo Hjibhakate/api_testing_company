@@ -62,7 +62,7 @@ HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Interview Set Studio</title>
+  <title>AceInt AI Interview Set Testing Platform</title>
   <style>
     :root {
       color-scheme: light;
@@ -86,6 +86,7 @@ HTML = r"""<!doctype html>
       --terminal-ink: #dfeaf6;
       --shadow: 0 18px 48px rgba(23, 33, 47, 0.1);
       --shadow-soft: 0 4px 16px rgba(23, 33, 47, 0.07);
+      --shadow-card: 0 10px 30px rgba(23, 33, 47, 0.08);
     }
 
     * { box-sizing: border-box; }
@@ -94,7 +95,8 @@ HTML = r"""<!doctype html>
       margin: 0;
       min-height: 100vh;
       background:
-        linear-gradient(180deg, #f8fafc 0, var(--bg) 310px);
+        radial-gradient(circle at 18% 0%, rgba(20, 103, 95, 0.12), transparent 28%),
+        linear-gradient(180deg, #f8fafc 0, var(--bg) 360px);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -105,17 +107,28 @@ HTML = r"""<!doctype html>
       padding: 26px 0 30px;
     }
 
+    .hero {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 20px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 252, 0.92));
+      box-shadow: var(--shadow);
+    }
+
     .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 20px;
     }
 
     h1 {
       margin: 0;
-      font-size: 25px;
+      font-size: 30px;
       line-height: 1.2;
       letter-spacing: 0;
     }
@@ -125,6 +138,49 @@ HTML = r"""<!doctype html>
       color: var(--muted);
       font-size: 14px;
       line-height: 1.45;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 12px;
+    }
+
+    .metric-card {
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 4px 14px rgba(23, 33, 47, 0.05);
+    }
+
+    .metric-card strong {
+      display: block;
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .metric-card span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .status {
@@ -164,9 +220,9 @@ HTML = r"""<!doctype html>
 
     .panel {
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 12px;
       background: var(--panel);
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow-card);
       overflow: hidden;
     }
 
@@ -175,7 +231,7 @@ HTML = r"""<!doctype html>
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 16px 18px 13px;
+      padding: 18px 20px 15px;
       border-bottom: 1px solid var(--line);
       background: linear-gradient(180deg, #ffffff, #fbfcfe);
     }
@@ -207,7 +263,7 @@ HTML = r"""<!doctype html>
       display: grid;
       grid-template-columns: minmax(180px, 1fr) 92px minmax(150px, 180px);
       gap: 14px;
-      padding: 18px;
+      padding: 20px;
     }
 
     .options-grid {
@@ -235,7 +291,7 @@ HTML = r"""<!doctype html>
     .test-actions {
       display: grid;
       gap: 11px;
-      padding: 18px;
+      padding: 20px;
     }
 
     label {
@@ -290,7 +346,7 @@ HTML = r"""<!doctype html>
       border-radius: 8px;
       padding: 0 17px;
       color: #fff;
-      background: var(--accent);
+      background: linear-gradient(180deg, #17776e, var(--accent));
       font: inherit;
       font-weight: 650;
       cursor: pointer;
@@ -367,8 +423,8 @@ HTML = r"""<!doctype html>
 
     .created-list {
       display: grid;
-      gap: 10px;
-      padding: 14px 18px 18px;
+      gap: 12px;
+      padding: 16px 20px 20px;
     }
 
     .created-card {
@@ -376,10 +432,12 @@ HTML = r"""<!doctype html>
       grid-template-columns: minmax(180px, 240px) minmax(280px, 1fr) auto;
       gap: 12px;
       align-items: end;
-      padding: 12px;
+      padding: 14px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, #ffffff, var(--panel-soft));
+      box-shadow: 0 4px 14px rgba(23, 33, 47, 0.05);
     }
 
     .created-title {
@@ -397,25 +455,105 @@ HTML = r"""<!doctype html>
       font-weight: 650;
     }
 
+    .topic-section {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 10px;
+      margin-top: 2px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .topic-card {
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .topic-card h4 {
+      margin: 0 0 7px;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .topic-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+    }
+
+    .topic-heading h4 {
+      margin: 0;
+    }
+
+    .topic-weight {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .subtopic-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .subtopic-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .question-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .question-list li + li {
+      margin-top: 5px;
+    }
+
     .ratings-list {
       display: grid;
       gap: 10px;
-      padding: 14px 18px 18px;
+      padding: 16px 20px 20px;
     }
 
     .criteria-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(120px, 1fr));
       gap: 10px;
-      padding: 14px 18px 0;
+      padding: 16px 20px 0;
     }
 
     .criteria-item {
       min-height: 70px;
       padding: 10px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #ffffff, var(--panel-soft));
     }
 
     .criteria-item strong {
@@ -446,8 +584,8 @@ HTML = r"""<!doctype html>
       align-items: start;
       padding: 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #ffffff, var(--panel-soft));
     }
 
     .score {
@@ -543,7 +681,7 @@ HTML = r"""<!doctype html>
 
     .log-shell {
       border: 1px solid #263448;
-      border-radius: 10px;
+      border-radius: 12px;
       overflow: hidden;
       background: var(--terminal);
       box-shadow: var(--shadow);
@@ -621,6 +759,8 @@ HTML = r"""<!doctype html>
     @media (max-width: 680px) {
       main { width: min(100vw - 20px, 1120px); padding-top: 14px; }
       .topbar, .panel-head, .form-actions { align-items: stretch; flex-direction: column; }
+      .hero { padding: 16px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .generator-form, .options-grid { grid-template-columns: 1fr; }
       .criteria-grid { grid-template-columns: 1fr; }
       .factor-breakdown { grid-template-columns: 1fr; }
@@ -633,13 +773,22 @@ HTML = r"""<!doctype html>
 </head>
 <body>
   <main>
-    <div class="topbar">
-      <div>
-        <h1>Interview Set Studio</h1>
-        <div class="subtitle">Create interview sets with controlled inputs, verified API execution, and live run logs.</div>
+    <section class="hero">
+      <div class="topbar">
+        <div>
+          <div class="hero-kicker">AceInt QA Workspace</div>
+          <h1>AceInt AI Interview Set Testing Platform</h1>
+          <div class="subtitle">Create interview sets with controlled inputs, verified API execution, candidate invites, and live run logs.</div>
+        </div>
+        <div class="status"><span id="dot" class="dot"></span><span id="statusText">Ready</span></div>
       </div>
-      <div class="status"><span id="dot" class="dot"></span><span id="statusText">Ready</span></div>
-    </div>
+      <div class="metrics">
+        <div class="metric-card"><strong>AI</strong><span>Role generation</span></div>
+        <div class="metric-card"><strong>10/10</strong><span>Plan scoring</span></div>
+        <div class="metric-card"><strong>Live</strong><span>API execution</span></div>
+        <div class="metric-card"><strong>Bulk</strong><span>Candidate invites</span></div>
+      </div>
+    </section>
 
     <div class="workspace">
       <section class="panel">
@@ -653,7 +802,7 @@ HTML = r"""<!doctype html>
 
         <div class="generator-form">
           <label>
-            Job type
+            Job stream
             <input id="jobFamily" type="text" value="Engineering">
           </label>
           <label>
@@ -920,12 +1069,40 @@ HTML = r"""<!doctype html>
             <textarea class="invite-candidates" data-index="${index}" placeholder="One per line: First Last email@example.com"></textarea>
           </label>
           <button class="invite-btn" data-index="${index}" type="button" ${item.code ? "" : "disabled"}>Invite</button>
+          ${renderTopicQuestions(item.topic_questions || [])}
         </div>
       `).join("");
 
       document.querySelectorAll(".invite-btn").forEach((button) => {
         button.addEventListener("click", () => inviteForSet(Number(button.dataset.index)));
       });
+    }
+
+    function renderTopicQuestions(topicQuestions) {
+      if (!topicQuestions.length) {
+        return '<div class="topic-section"><div class="ratings-empty">Topics and generated questions will appear here.</div></div>';
+      }
+
+      return `
+        <div class="topic-section">
+          ${topicQuestions.map((item) => `
+            <div class="topic-card">
+              <div class="topic-heading">
+                <h4>${item.topic}</h4>
+                <span class="topic-weight">${item.weightage ?? "-"}%</span>
+              </div>
+              ${
+                item.subtopics && item.subtopics.length
+                  ? `<div class="subtopic-row">${item.subtopics.map((subtopic) => `<span class="subtopic-pill">${subtopic}</span>`).join("")}</div>`
+                  : ""
+              }
+              <ol class="question-list">
+                ${(item.questions || []).map((question) => `<li>${question}</li>`).join("")}
+              </ol>
+            </div>
+          `).join("")}
+        </div>
+      `;
     }
 
     async function pollCreatedSets() {
@@ -1061,6 +1238,7 @@ def add_created_set(created_set: dict[str, Any]) -> None:
             {
                 "title": created_set.get("title", "Interview Set"),
                 "code": created_set.get("code"),
+                "topic_questions": created_set.get("topic_questions") or [],
             }
         )
 
@@ -1138,7 +1316,7 @@ def run_interview_set_generator(
 
     try:
         add_log("[UI] Starting AI interview set generator.", "meta")
-        add_log(f"[UI] Job type: {job_family}", "meta")
+        add_log(f"[UI] Job stream: {job_family}", "meta")
         add_log(f"[UI] Role count: {count}", "meta")
         add_log(f"[UI] Experience range: {experience_range}", "meta")
         add_log(f"[UI] Question mode: {question_mode}", "meta")
@@ -1501,7 +1679,12 @@ def main() -> None:
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}"
     print(f"Test runner UI is available at {url}", flush=True)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nTest runner UI stopped.", flush=True)
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":

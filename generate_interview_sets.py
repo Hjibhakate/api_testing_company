@@ -90,6 +90,37 @@ def build_draft(
     return draft
 
 
+def build_topic_questions(role_title, interview_plan):
+    topic_questions = []
+
+    for dimension in interview_plan.get("dimensions", []):
+        topic = dimension.get("name", "Interview Topic")
+        subtopics = dimension.get("subtopics") or []
+        subtopic_names = [item.get("name") for item in subtopics if item.get("name")]
+        concepts = []
+
+        for subtopic in subtopics:
+            concepts.extend(subtopic.get("concepts") or [])
+
+        primary_concept = concepts[0] if concepts else topic
+        secondary_concept = concepts[1] if len(concepts) > 1 else primary_concept
+
+        topic_questions.append(
+            {
+                "topic": topic,
+                "weightage": dimension.get("weightage"),
+                "subtopics": subtopic_names,
+                "questions": [
+                    f"How would you apply {primary_concept} in a real {role_title} task?",
+                    f"Walk me through a practical example where {secondary_concept} matters for this role.",
+                    f"What common mistakes should be avoided when working with {topic}?",
+                ],
+            }
+        )
+
+    return topic_questions
+
+
 def create_one_interview_set(
     token,
     draft,
@@ -168,6 +199,7 @@ def create_one_interview_set(
     return {
         "title": draft["title"],
         "code": find_interview_set_code(save_json),
+        "topic_questions": build_topic_questions(draft["title"], interview_plan),
         "response": save_json,
     }
 
