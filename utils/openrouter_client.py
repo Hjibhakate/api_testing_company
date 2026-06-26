@@ -47,7 +47,7 @@ def _get_openrouter_settings():
     api_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
     if not api_key or api_key == "paste_your_openrouter_api_key_here":
         raise RuntimeError(
-            "OPENROUTER_API_KEY is missing. Add it in config/config.py."
+            "OPENROUTER_API_KEY is missing. Set it in Render Environment variables or local .env."
         )
 
     model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)

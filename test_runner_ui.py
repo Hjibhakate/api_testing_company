@@ -455,6 +455,20 @@ HTML = r"""<!doctype html>
       font-weight: 650;
     }
 
+    .invite-count {
+      width: fit-content;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      margin-top: 3px;
+    }
+
     .topic-section {
       grid-column: 1 / -1;
       display: grid;
@@ -1063,12 +1077,13 @@ HTML = r"""<!doctype html>
           <div class="created-title">
             ${item.title}
             <span>${item.code || "Code not found"}</span>
+            <span class="invite-count">${item.invite_count || 0} send${item.invite_count === 1 ? "" : "s"}</span>
           </div>
           <label>
             Candidates
             <textarea class="invite-candidates" data-index="${index}" placeholder="One per line: First Last email@example.com"></textarea>
           </label>
-          <button class="invite-btn" data-index="${index}" type="button" ${item.code ? "" : "disabled"}>Invite</button>
+          <button class="invite-btn" data-index="${index}" type="button" ${item.code ? "" : "disabled"}>${item.invite_count ? "Send Again" : "Invite"}</button>
           ${renderTopicQuestions(item.topic_questions || [])}
         </div>
       `).join("");
@@ -1190,8 +1205,9 @@ HTML = r"""<!doctype html>
 
       if (button) {
         button.disabled = false;
-        button.textContent = data.ok ? "Invite Sent" : "Invite";
+        button.textContent = data.ok ? "Send Again" : "Invite";
       }
+      await pollCreatedSets();
     }
 
     runBtn.addEventListener("click", startRun);
@@ -1239,6 +1255,7 @@ def add_created_set(created_set: dict[str, Any]) -> None:
                 "title": created_set.get("title", "Interview Set"),
                 "code": created_set.get("code"),
                 "topic_questions": created_set.get("topic_questions") or [],
+                "invite_count": 0,
             }
         )
 
@@ -1503,6 +1520,8 @@ def invite_created_set(payload: dict[str, Any]) -> tuple[bool, str]:
     try:
         token = get_token()
         if send_candidate_invites(token, created_set, candidates):
+            with CREATED_SETS_LOCK:
+                CREATED_SETS[index]["invite_count"] = CREATED_SETS[index].get("invite_count", 0) + 1
             return True, f"Invite sent for {len(candidates)} candidate(s) for {created_set['title']}."
         return False, f"Invite failed for {created_set['title']}."
     except Exception as exc:
