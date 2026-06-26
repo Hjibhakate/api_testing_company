@@ -51,21 +51,30 @@ HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>API Test Runner</title>
+  <title>Interview Set Studio</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f5f7fb;
+      --bg: #eef2f5;
       --panel: #ffffff;
-      --ink: #162033;
-      --muted: #647084;
-      --line: #d7dde8;
-      --accent: #0b7a75;
-      --accent-dark: #075f5b;
-      --danger: #bd2f2f;
-      --ok: #2f7d32;
-      --terminal: #101723;
-      --terminal-ink: #dce8f7;
+      --panel-soft: #f9fbfd;
+      --ink: #17212f;
+      --muted: #687586;
+      --line: #d8e0e8;
+      --line-strong: #bfccd8;
+      --accent: #14675f;
+      --accent-dark: #0f514b;
+      --accent-soft: #e8f4f2;
+      --danger: #b42318;
+      --danger-soft: #fff0ee;
+      --ok: #277a45;
+      --ok-soft: #edf8f1;
+      --warn: #b7791f;
+      --terminal: #121821;
+      --terminal-top: #1b2430;
+      --terminal-ink: #dfeaf6;
+      --shadow: 0 18px 48px rgba(23, 33, 47, 0.1);
+      --shadow-soft: 0 4px 16px rgba(23, 33, 47, 0.07);
     }
 
     * { box-sizing: border-box; }
@@ -73,15 +82,16 @@ HTML = r"""<!doctype html>
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        linear-gradient(180deg, #f8fafc 0, var(--bg) 310px);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     main {
-      width: min(1120px, calc(100vw - 32px));
+      width: min(1180px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 24px 0;
+      padding: 26px 0 30px;
     }
 
     .topbar {
@@ -89,28 +99,37 @@ HTML = r"""<!doctype html>
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
 
     h1 {
       margin: 0;
-      font-size: 24px;
+      font-size: 25px;
       line-height: 1.2;
       letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
     }
 
     .status {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      min-height: 34px;
-      padding: 6px 10px;
+      min-height: 38px;
+      padding: 7px 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
       color: var(--muted);
       font-size: 14px;
+      font-weight: 650;
       white-space: nowrap;
+      box-shadow: var(--shadow-soft);
     }
 
     .dot {
@@ -120,51 +139,121 @@ HTML = r"""<!doctype html>
       background: var(--muted);
     }
 
-    .dot.running { background: #d8941f; }
+    .dot.running { background: var(--warn); }
     .dot.pass { background: var(--ok); }
     .dot.fail { background: var(--danger); }
 
-    .toolbar {
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      margin-bottom: 16px;
+      gap: 14px;
+      padding: 16px 18px 13px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #fbfcfe);
     }
 
-    .generator {
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .panel-copy {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .generator-form {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) 100px minmax(150px, 1fr) 140px 120px auto;
-      align-items: end;
-      gap: 12px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      margin-bottom: 16px;
+      grid-template-columns: minmax(180px, 1fr) 92px minmax(150px, 180px);
+      gap: 14px;
+      padding: 18px;
+    }
+
+    .options-grid {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 14px;
+    }
+
+    .form-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding-top: 4px;
+    }
+
+    .test-panel {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .test-actions {
+      display: grid;
+      gap: 11px;
+      padding: 18px;
     }
 
     label {
       display: grid;
       gap: 6px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 700;
       line-height: 1.25;
     }
 
     input, select {
       width: 100%;
-      min-height: 38px;
+      min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 0 10px;
+      padding: 0 11px;
       color: var(--ink);
       background: #fff;
       font: inherit;
+      font-size: 14px;
+      font-weight: 520;
+      outline: none;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
 
     .controls {
@@ -175,33 +264,98 @@ HTML = r"""<!doctype html>
     }
 
     button {
-      min-height: 38px;
+      min-height: 42px;
       border: 0;
       border-radius: 8px;
-      padding: 0 14px;
+      padding: 0 17px;
       color: #fff;
       background: var(--accent);
       font: inherit;
       font-weight: 650;
       cursor: pointer;
+      box-shadow: 0 1px 2px rgba(24, 39, 75, 0.08);
+      transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
     }
 
-    button:hover { background: var(--accent-dark); }
+    button:hover {
+      background: var(--accent-dark);
+      box-shadow: 0 5px 14px rgba(18, 107, 99, 0.2);
+    }
+
+    button:active { transform: translateY(1px); }
+
     button:disabled {
       cursor: not-allowed;
       background: #8a97a8;
+      box-shadow: none;
     }
 
     .ghost {
-      background: #e7edf5;
+      background: #edf2f7;
       color: var(--ink);
+      border: 1px solid var(--line);
     }
 
     .ghost:hover { background: #dce4ef; }
 
+    .wide-button {
+      width: 100%;
+    }
+
+    .summary-list {
+      display: grid;
+      gap: 9px;
+      margin-top: 2px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .summary-row strong {
+      color: var(--ink);
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .log-shell {
+      border: 1px solid #263448;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--terminal);
+      box-shadow: var(--shadow);
+    }
+
+    .log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 44px;
+      padding: 0 12px 0 14px;
+      background: var(--terminal-top);
+      color: #a8b7c8;
+      border-bottom: 1px solid #2b394b;
+      font-size: 13px;
+    }
+
+    .log-title {
+      font-weight: 700;
+      color: #e9f1fb;
+    }
+
     .hint {
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1.4;
     }
 
@@ -209,26 +363,49 @@ HTML = r"""<!doctype html>
       height: min(68vh, 720px);
       min-height: 420px;
       overflow: auto;
-      border-radius: 8px;
       background: var(--terminal);
       color: var(--terminal-ink);
-      border: 1px solid #263448;
-      padding: 14px;
+      padding: 15px;
       font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
       font-size: 13px;
-      line-height: 1.55;
+      line-height: 1.58;
       white-space: pre-wrap;
       word-break: break-word;
+    }
+
+    .terminal:empty::before {
+      content: "Ready.";
+      color: #7f90a5;
+    }
+
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 7px;
+      border-radius: 6px;
+      background: #263448;
+      color: #dfeaf6;
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .line.meta { color: #8fb3d9; }
     .line.pass { color: #9be29d; }
     .line.fail { color: #ff9b9b; }
 
+    @media (max-width: 980px) {
+      .workspace { grid-template-columns: 1fr; }
+      .generator-form { grid-template-columns: minmax(0, 1fr) 110px; }
+      .generator-form label:nth-child(3) { grid-column: 1 / -1; }
+      .options-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
     @media (max-width: 680px) {
       main { width: min(100vw - 20px, 1120px); padding-top: 14px; }
-      .topbar, .toolbar { align-items: stretch; flex-direction: column; }
-      .generator { grid-template-columns: 1fr; }
+      .topbar, .panel-head, .form-actions { align-items: stretch; flex-direction: column; }
+      .generator-form, .options-grid { grid-template-columns: 1fr; }
+      .generator-form label:nth-child(3) { grid-column: auto; }
       .status { width: 100%; }
       .terminal { min-height: 56vh; height: 62vh; }
     }
@@ -237,47 +414,99 @@ HTML = r"""<!doctype html>
 <body>
   <main>
     <div class="topbar">
-      <h1>API Test Runner</h1>
+      <div>
+        <h1>Interview Set Studio</h1>
+        <div class="subtitle">Create interview sets with controlled inputs, verified API execution, and live run logs.</div>
+      </div>
       <div class="status"><span id="dot" class="dot"></span><span id="statusText">Ready</span></div>
     </div>
 
-    <div class="toolbar">
-      <div class="controls">
-        <button id="runBtn" type="button">Run Tests</button>
-        <button id="clearBtn" class="ghost" type="button">Clear</button>
+    <div class="workspace">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Generator</p>
+            <h2>Create Interview Sets</h2>
+            <p class="panel-copy">Choose the role family and interview settings before creating sets.</p>
+          </div>
+        </div>
+
+        <div class="generator-form">
+          <label>
+            Job type
+            <input id="jobFamily" type="text" value="Engineering">
+          </label>
+          <label>
+            Roles
+            <input id="roleCount" type="number" min="1" max="50" value="5">
+          </label>
+          <label>
+            Experience
+            <input id="experienceRange" type="text" value="1-2 years">
+          </label>
+
+          <div class="options-grid">
+            <label>
+              Mode
+              <select id="questionMode">
+                <option value="DIRECT">Direct</option>
+                <option value="SCENARIO">Scenario</option>
+                <option value="BEI">BEI</option>
+              </select>
+            </label>
+            <label>
+              Minutes
+              <input id="duration" type="number" min="1" value="30">
+            </label>
+            <label>
+              AI voice
+              <select id="aiVoiceGender">
+                <option value="FEMALE">Female</option>
+                <option value="MALE">Male</option>
+              </select>
+            </label>
+            <label>
+              AI avatar
+              <select id="aiAvatarGender">
+                <option value="FEMALE">Female</option>
+                <option value="MALE">Male</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button id="generateBtn" type="button">Generate Interview Sets</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel test-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Checks</p>
+            <h2>Verification</h2>
+            <p class="panel-copy">Run tests and clear the output when needed.</p>
+          </div>
+        </div>
+        <div class="test-actions">
+          <button id="runBtn" class="wide-button" type="button">Run Tests</button>
+          <button id="clearBtn" class="ghost wide-button" type="button">Clear Log</button>
+          <div class="summary-list">
+            <div class="summary-row"><span>Execution</span><strong>Live</strong></div>
+            <div class="summary-row"><span>Runner</span><strong>pytest</strong></div>
+            <div class="summary-row"><span>Output</span><strong>Streamed</strong></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="log-shell">
+      <div class="log-head">
+        <span class="log-title">Live Activity</span>
+        <span class="hint"><span class="kbd">log</span> Streaming output</span>
       </div>
-      <div class="hint">Runs <strong>python -m pytest</strong> and shows live output here.</div>
+      <div id="terminal" class="terminal" aria-live="polite"></div>
     </div>
-
-    <div class="generator">
-      <label>
-        Job type
-        <input id="jobFamily" type="text" value="Engineering">
-      </label>
-      <label>
-        Roles
-        <input id="roleCount" type="number" min="1" max="50" value="5">
-      </label>
-      <label>
-        Experience
-        <input id="experienceRange" type="text" value="1-2 years">
-      </label>
-      <label>
-        Mode
-        <select id="questionMode">
-          <option value="DIRECT">Direct</option>
-          <option value="SCENARIO">Scenario</option>
-          <option value="BEI">BEI</option>
-        </select>
-      </label>
-      <label>
-        Minutes
-        <input id="duration" type="number" min="1" value="30">
-      </label>
-      <button id="generateBtn" type="button">Generate Interview Sets</button>
-    </div>
-
-    <div id="terminal" class="terminal" aria-live="polite"></div>
   </main>
 
   <script>
@@ -289,6 +518,8 @@ HTML = r"""<!doctype html>
     const experienceRange = document.getElementById("experienceRange");
     const questionMode = document.getElementById("questionMode");
     const duration = document.getElementById("duration");
+    const aiVoiceGender = document.getElementById("aiVoiceGender");
+    const aiAvatarGender = document.getElementById("aiAvatarGender");
     const terminal = document.getElementById("terminal");
     const statusText = document.getElementById("statusText");
     const dot = document.getElementById("dot");
@@ -361,7 +592,9 @@ HTML = r"""<!doctype html>
         count: Number(roleCount.value || 1),
         experience_range: experienceRange.value.trim() || "1-2 years",
         question_mode: questionMode.value || "DIRECT",
-        duration: Number(duration.value || 30)
+        duration: Number(duration.value || 30),
+        ai_voice_gender: aiVoiceGender.value || "FEMALE",
+        ai_avatar_gender: aiAvatarGender.value || "FEMALE"
       };
 
       const response = await fetch("/generate", {
@@ -468,6 +701,8 @@ def run_interview_set_generator(
     experience_range: str,
     question_mode: str,
     duration: int,
+    ai_voice_gender: str,
+    ai_avatar_gender: str,
 ) -> None:
     global EXIT_CODE, RUNNING
 
@@ -478,6 +713,8 @@ def run_interview_set_generator(
         add_log(f"[UI] Experience range: {experience_range}", "meta")
         add_log(f"[UI] Question mode: {question_mode}", "meta")
         add_log(f"[UI] Duration: {duration} minutes", "meta")
+        add_log(f"[UI] AI voice: {ai_voice_gender}", "meta")
+        add_log(f"[UI] AI avatar: {ai_avatar_gender}", "meta")
 
         writer = LogWriter()
         with contextlib.redirect_stdout(writer):
@@ -496,7 +733,14 @@ def run_interview_set_generator(
             success_count = 0
 
             for role in roles:
-                draft = build_draft(role, experience_range, question_mode, duration)
+                draft = build_draft(
+                    role,
+                    experience_range,
+                    question_mode,
+                    duration,
+                    ai_voice_gender,
+                    ai_avatar_gender,
+                )
                 print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
                 if create_one_interview_set(token, draft):
                     success_count += 1
@@ -546,6 +790,8 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
     job_family = str(payload.get("job_family") or "Engineering").strip()
     experience_range = str(payload.get("experience_range") or "1-2 years").strip()
     question_mode = str(payload.get("question_mode") or "DIRECT").strip().upper()
+    ai_voice_gender = str(payload.get("ai_voice_gender") or "FEMALE").strip().upper()
+    ai_avatar_gender = str(payload.get("ai_avatar_gender") or "FEMALE").strip().upper()
     try:
         count = int(payload.get("count") or 1)
     except (TypeError, ValueError):
@@ -561,6 +807,10 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
         return False, "Duration must be at least 1 minute."
     if question_mode not in ("DIRECT", "SCENARIO", "BEI"):
         return False, "Question mode must be DIRECT, SCENARIO, or BEI."
+    if ai_voice_gender not in ("MALE", "FEMALE"):
+        return False, "AI voice must be MALE or FEMALE."
+    if ai_avatar_gender not in ("MALE", "FEMALE"):
+        return False, "AI avatar must be MALE or FEMALE."
 
     with PROCESS_LOCK:
         if RUNNING:
@@ -572,7 +822,15 @@ def start_generator(payload: dict[str, Any]) -> tuple[bool, str]:
 
     thread = threading.Thread(
         target=run_interview_set_generator,
-        args=(job_family, count, experience_range, question_mode, duration),
+        args=(
+            job_family,
+            count,
+            experience_range,
+            question_mode,
+            duration,
+            ai_voice_gender,
+            ai_avatar_gender,
+        ),
         daemon=True,
     )
     thread.start()

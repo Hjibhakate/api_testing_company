@@ -1,7 +1,11 @@
 from copy import deepcopy
 
 from services.interview_set_service import create_interview_plan, save_interview_set
-from test_data.test_data import INTERVIEW_SET_DRAFT
+from test_data.test_data import (
+    AI_AVATAR_FEMALE_URL,
+    AI_AVATAR_MALE_URL,
+    INTERVIEW_SET_DRAFT,
+)
 from utils.auth_helper import get_token
 from utils.openrouter_client import generate_job_roles
 
@@ -39,7 +43,21 @@ def ask_choice(question, choices, default):
         print(f"Please choose one of: {', '.join(choices)}", flush=True)
 
 
-def build_draft(role_data, experience_range, question_mode=None, duration=None):
+def get_ai_avatar_url(ai_avatar_gender):
+    if ai_avatar_gender == "MALE":
+        return AI_AVATAR_MALE_URL
+
+    return AI_AVATAR_FEMALE_URL
+
+
+def build_draft(
+    role_data,
+    experience_range,
+    question_mode=None,
+    duration=None,
+    ai_voice_gender=None,
+    ai_avatar_gender=None,
+):
     draft = deepcopy(INTERVIEW_SET_DRAFT)
     draft.update(role_data)
     draft["title"] = role_data["title"]
@@ -47,6 +65,8 @@ def build_draft(role_data, experience_range, question_mode=None, duration=None):
     draft["experience_level"] = experience_range
     draft["question_mode"] = question_mode or role_data.get("question_mode", draft["question_mode"])
     draft["duration"] = int(duration or role_data.get("duration", draft["duration"]))
+    if ai_avatar_gender:
+        draft["aiAvatar"] = get_ai_avatar_url(ai_avatar_gender)
     return draft
 
 
@@ -88,6 +108,16 @@ def main():
         "DIRECT",
     )
     duration = ask_int("How many minutes for interview? 10, 20, 30, 45, or 60", 30)
+    ai_voice_gender = ask_choice(
+        "Which AI voice do you want? MALE or FEMALE",
+        ("MALE", "FEMALE"),
+        "FEMALE",
+    )
+    ai_avatar_gender = ask_choice(
+        "Which AI avatar do you want? MALE or FEMALE",
+        ("MALE", "FEMALE"),
+        "FEMALE",
+    )
 
     roles = generate_job_roles(job_family, count, experience_range, question_mode, duration)
     print("\nGenerated roles:", flush=True)
@@ -103,7 +133,14 @@ def main():
     success_count = 0
 
     for role in roles:
-        draft = build_draft(role, experience_range, question_mode, duration)
+        draft = build_draft(
+            role,
+            experience_range,
+            question_mode,
+            duration,
+            ai_voice_gender,
+            ai_avatar_gender,
+        )
         print(f"\n[CREATE] Starting: {draft['title']}", flush=True)
         if create_one_interview_set(token, draft):
             success_count += 1

@@ -30,6 +30,7 @@ def build_save_payload(interview_plan, draft=None):
         draft = INTERVIEW_SET_DRAFT
 
     draft = deepcopy(draft)
+    draft.pop("aiVoiceGender", None)
     draft["interview_plan"] = interview_plan
 
     return draft
