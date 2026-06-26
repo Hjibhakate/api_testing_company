@@ -27,7 +27,22 @@ def _extract_json_array(text):
     return parsed
 
 
-def generate_job_roles(job_family, count, experience_range, question_mode, duration):
+def _extract_json_object(text):
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{[\s\S]*\}", text)
+        if not match:
+            raise ValueError(f"OpenRouter did not return a JSON object: {text}")
+        parsed = json.loads(match.group(0))
+
+    if not isinstance(parsed, dict):
+        raise ValueError("OpenRouter response must be a JSON object.")
+
+    return parsed
+
+
+def _get_openrouter_settings():
     load_dotenv()
     api_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
     if not api_key or api_key == "paste_your_openrouter_api_key_here":
@@ -36,6 +51,31 @@ def generate_job_roles(job_family, count, experience_range, question_mode, durat
         )
 
     model = OPENROUTER_MODEL or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
+    return api_key, model
+
+
+def _post_openrouter(messages, temperature=0.2):
+    api_key, model = _get_openrouter_settings()
+    response = requests.post(
+        OPENROUTER_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost",
+            "X-Title": "API Testing Project",
+        },
+        json={
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+        },
+        timeout=120,
+    )
+
+    return response, model
+
+
+def generate_job_roles(job_family, count, experience_range, question_mode, duration):
     prompt = f"""
 Generate {count} interview job role drafts for the job family: {job_family}.
 Experience range must be exactly: {experience_range}.
@@ -61,32 +101,66 @@ Java Developer, Frontend Developer, DevOps Engineer, QA Automation Engineer, etc
 Do not include duplicate role names.
 """
 
+    messages = [
+        {
+            "role": "system",
+            "content": "You generate strict JSON only. No markdown.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    response, model = _post_openrouter(messages, temperature=0.4)
     print(f"[OPENROUTER] Generating {count} roles using {model}...", flush=True)
-    response = requests.post(
-        OPENROUTER_URL,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "API Testing Project",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You generate strict JSON only. No markdown.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.4,
-        },
-        timeout=120,
-    )
-
     print(f"[OPENROUTER] Status: {response.status_code}", flush=True)
     if response.status_code != 200:
         raise RuntimeError(f"OpenRouter failed: {response.text}")
 
     content = response.json()["choices"][0]["message"]["content"]
     return _extract_json_array(content)
+
+
+def verify_interview_plan(role_title, experience_range, duration, question_mode, interview_plan):
+    prompt = f"""
+Evaluate whether this interview plan is appropriate for the requested role.
+
+Requested role: {role_title}
+Experience range: {experience_range}
+Duration minutes: {duration}
+Question mode: {question_mode}
+
+Interview plan JSON:
+{json.dumps(interview_plan, ensure_ascii=True)}
+
+Return only a JSON object with this exact schema:
+{{
+  "rating": 0,
+  "verdict": "pass|needs_review|fail",
+  "reason": "one concise sentence",
+  "role_alignment_notes": ["short note 1", "short note 2"],
+  "missing_or_weak_topics": ["topic if any"]
+}}
+
+Rate out of 10 based on role relevance, seniority/experience fit, coverage of role-specific skills,
+time allocation, and whether the plan avoids generic or unrelated topics.
+"""
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a strict interview design reviewer. Return strict JSON only.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    print(f"[OPENROUTER] Verifying interview plan for {role_title}...", flush=True)
+    response, _model = _post_openrouter(messages, temperature=0.1)
+    print(f"[OPENROUTER] Verification status: {response.status_code}", flush=True)
+    if response.status_code != 200:
+        raise RuntimeError(f"OpenRouter verification failed: {response.text}")
+
+    content = response.json()["choices"][0]["message"]["content"]
+    result = _extract_json_object(content)
+    result["rating"] = max(0, min(10, float(result.get("rating", 0))))
+    result["verdict"] = str(result.get("verdict", "needs_review"))
+    result["reason"] = str(result.get("reason", "")).strip()
+    result["role_alignment_notes"] = result.get("role_alignment_notes") or []
+    result["missing_or_weak_topics"] = result.get("missing_or_weak_topics") or []
+    return result

@@ -7,7 +7,7 @@ from test_data.test_data import (
     INTERVIEW_SET_DRAFT,
 )
 from utils.auth_helper import get_token
-from utils.openrouter_client import generate_job_roles
+from utils.openrouter_client import generate_job_roles, verify_interview_plan
 
 
 def ask_text(question, default=None):
@@ -81,7 +81,27 @@ def create_one_interview_set(token, draft):
         print("[CREATE] Interview plan response is invalid:", plan_response.text, flush=True)
         return False
 
-    save_response = save_interview_set(token, plan_json["data"], draft)
+    interview_plan = plan_json["data"]
+    review = verify_interview_plan(
+        draft["role"],
+        draft["experience_level"],
+        draft["duration"],
+        draft["question_mode"],
+        interview_plan,
+    )
+    print(
+        f"[VERIFY] {draft['title']} plan rating: {review['rating']}/10 "
+        f"({review['verdict']})",
+        flush=True,
+    )
+    if review["reason"]:
+        print(f"[VERIFY] Reason: {review['reason']}", flush=True)
+
+    weak_topics = review.get("missing_or_weak_topics") or []
+    if weak_topics:
+        print(f"[VERIFY] Missing/weak topics: {', '.join(weak_topics)}", flush=True)
+
+    save_response = save_interview_set(token, interview_plan, draft)
     if save_response.status_code not in (200, 201):
         print("[CREATE] Save failed:", save_response.text, flush=True)
         return False
