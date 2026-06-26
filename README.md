@@ -26,6 +26,14 @@ Then open:
 http://127.0.0.1:8765
 ```
 
+The server also supports Render-style host/port environment variables:
+
+```powershell
+$env:HOST="0.0.0.0"
+$env:PORT="8765"
+python -B test_runner_ui.py
+```
+
 The UI lets you select:
 
 - Job type
@@ -91,6 +99,18 @@ Important values:
 - `EMAIL_PASSWORD`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL`
+
+For local development, keep these values in `.env`. The `.env` file is ignored by Git.
+
+Example:
+
+```text
+BASE_URL=https://test-workspace.aceint.ai/company/backend
+EMAIL=your_email@gmail.com
+EMAIL_PASSWORD=your_gmail_app_password
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_MODEL=openai/gpt-4o-mini
+```
 
 Test data and default interview set values are in:
 
@@ -192,3 +212,47 @@ The UI has a `Cancel Run` button.
 - Pytest runs stop immediately.
 - Interview set generation stops safely after the current API/OpenRouter request finishes.
 - If cancellation happens after verification and before save, the save step is skipped.
+
+## Deploy On Render
+
+This repository includes:
+
+```text
+render.yaml
+runtime.txt
+```
+
+Render start command:
+
+```bash
+python -B test_runner_ui.py
+```
+
+Render build command:
+
+```bash
+pip install -r requirements.txt
+```
+
+Set these environment variables in Render:
+
+```text
+BASE_URL
+EMAIL
+EMAIL_PASSWORD
+OPENROUTER_API_KEY
+OPENROUTER_MODEL
+```
+
+Use this value for `OPENROUTER_MODEL` unless you want another model:
+
+```text
+openai/gpt-4o-mini
+```
+
+Important:
+
+- Do not upload `.env` to GitHub.
+- Render provides `PORT` automatically.
+- The app binds to `0.0.0.0` by default, so it can receive Render traffic.
+- Gmail OTP login depends on the configured Gmail account and app password working from Render.

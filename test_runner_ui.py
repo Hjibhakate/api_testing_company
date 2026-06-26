@@ -1672,13 +1672,15 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Local browser UI for pytest runs.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=8765, type=int)
+    parser.add_argument("--host", default=os.getenv("HOST", "0.0.0.0"))
+    parser.add_argument("--port", default=int(os.getenv("PORT", "8765")), type=int)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    url = f"http://{args.host}:{args.port}"
-    print(f"Test runner UI is available at {url}", flush=True)
+    display_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+    url = f"http://{display_host}:{args.port}"
+    print(f"Test runner UI is listening on {args.host}:{args.port}", flush=True)
+    print(f"Local URL: {url}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

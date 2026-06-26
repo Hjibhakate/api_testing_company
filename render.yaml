@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: aceint-interview-set-testing-platform
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -B test_runner_ui.py
+    envVars:
+      - key: BASE_URL
+        sync: false
+      - key: EMAIL
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openai/gpt-4o-mini
