@@ -4,6 +4,8 @@ from services.interview_set_service import create_interview_plan, save_interview
 from test_data.test_data import (
     AI_AVATAR_FEMALE_URL,
     AI_AVATAR_MALE_URL,
+    AI_VOICE_FEMALE_ID,
+    AI_VOICE_MALE_ID,
     INTERVIEW_SET_DRAFT,
 )
 from utils.auth_helper import get_token
@@ -50,6 +52,13 @@ def get_ai_avatar_url(ai_avatar_gender):
     return AI_AVATAR_FEMALE_URL
 
 
+def get_ai_voice_id(ai_voice_gender):
+    if ai_voice_gender == "MALE":
+        return AI_VOICE_MALE_ID
+
+    return AI_VOICE_FEMALE_ID
+
+
 def build_draft(
     role_data,
     experience_range,
@@ -65,8 +74,12 @@ def build_draft(
     draft["experience_level"] = experience_range
     draft["question_mode"] = question_mode or role_data.get("question_mode", draft["question_mode"])
     draft["duration"] = int(duration or role_data.get("duration", draft["duration"]))
+    if ai_voice_gender:
+        draft["aiVoice"] = get_ai_voice_id(ai_voice_gender)
     if ai_avatar_gender:
         draft["aiAvatar"] = get_ai_avatar_url(ai_avatar_gender)
+    print(f"[DRAFT] AI voice: {draft['aiVoice']}", flush=True)
+    print(f"[DRAFT] AI avatar: {draft['aiAvatar']}", flush=True)
     return draft
 
 

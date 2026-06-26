@@ -3,7 +3,10 @@ EMAIL = "companydemo10@gmail.com"
 COMPANY_ID = "c2af53c8-073f-4d18-a0b2-ed5735abea45"
 
 AI_AVATAR_FEMALE_URL = "https://aceint-website.s3.ap-south-1.amazonaws.com/avatar/AI_AVATAR.png"
-AI_AVATAR_MALE_URL = "https://aceint-website.s3.ap-south-1.amazonaws.com/avatar/AI_AVATAR.png"
+AI_AVATAR_MALE_URL = "https://aceint-website.s3.ap-south-1.amazonaws.com/avatar/AceitnAvatarMale.png"
+
+AI_VOICE_FEMALE_ID = "0f14d8cb-f039-41fe-a813-a9b4bee7eed8"
+AI_VOICE_MALE_ID = "098fb15d-2597-4186-8b74-25340050b6e7"
 
 INTERVIEW_SET_DRAFT = {
     "title": "Python Developer",
@@ -17,7 +20,7 @@ INTERVIEW_SET_DRAFT = {
     "visibility": "PUBLIC",
     "org_type": "company",
     "aiAvatar": AI_AVATAR_FEMALE_URL,
-    "aiVoice": "0f14d8cb-f039-41fe-a813-a9b4bee7eed8",
+    "aiVoice": AI_VOICE_FEMALE_ID,
     "interviewerOverlay": "",
     "departmentIds": [],
     "programIds": [],
