@@ -6,6 +6,7 @@ import time
 
 
 def get_latest_email_uid(email_id, password):
+    print("[EMAIL] Checking latest inbox UID...", flush=True)
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     try:
         mail.login(email_id, password)
@@ -13,9 +14,12 @@ def get_latest_email_uid(email_id, password):
 
         status, messages = mail.uid("search", None, "ALL")
         if status != "OK" or not messages or not messages[0]:
+            print("[EMAIL] Inbox is empty or UID search failed.", flush=True)
             return None
 
-        return int(messages[0].split()[-1])
+        latest_uid = int(messages[0].split()[-1])
+        print(f"[EMAIL] Latest inbox UID: {latest_uid}", flush=True)
+        return latest_uid
     finally:
         try:
             mail.logout()
@@ -36,7 +40,10 @@ def get_otp_from_email(
     Assumes the email body contains the OTP as the last 4-6 digit number.
     """
 
-    print("Waiting for OTP email...")
+    print(
+        f"[EMAIL] Polling inbox for OTP for up to {max_wait_seconds}s...",
+        flush=True,
+    )
 
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(email_id, password)
@@ -45,6 +52,8 @@ def get_otp_from_email(
     deadline = time.time() + max_wait_seconds
 
     while time.time() < deadline:
+        remaining_seconds = int(deadline - time.time())
+        print(f"[EMAIL] Searching OTP emails. Time left: {remaining_seconds}s", flush=True)
         if after_uid is None:
             status, messages = mail.uid("search", None, "ALL")
         else:
@@ -106,7 +115,7 @@ def get_otp_from_email(
                     return (-counts[x], -len(x))
 
                 otp = sorted(set(otps), key=sort_key)[0]
-                print("FINAL OTP:", otp)
+                print("[EMAIL] OTP found.", flush=True)
                 try:
                     mail.logout()
                 except Exception:
@@ -120,4 +129,5 @@ def get_otp_from_email(
     except Exception:
         pass
 
+    print("[EMAIL] OTP polling timed out.", flush=True)
     return None
