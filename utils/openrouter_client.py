@@ -5,7 +5,7 @@ import re
 import requests
 from dotenv import load_dotenv
 
-from config.config import OPENROUTER_API_KEY, OPENROUTER_MODEL
+from config.config import OPENROUTER_API_KEY
 
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -50,7 +50,7 @@ def _get_openrouter_settings():
             "OPENROUTER_API_KEY is missing. Add it in config/config.py."
         )
 
-    model = OPENROUTER_MODEL or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
+    model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
     return api_key, model
 
 
